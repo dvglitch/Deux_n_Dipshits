@@ -1,6 +1,6 @@
 # Phase 03 - Source Package Refactor
 
-Status: Complete for the structural refactor; Vercel preview verification remains.
+Status: Local structural refactor complete; Vercel redeploy validation pending after dependency metadata fix.
 
 ## Objective
 Move application code under `src/dnd_clock/` and keep the root `app.py` a thin local entry point without changing intended behavior.
@@ -32,6 +32,7 @@ Local tests and retained routes pass; application creation is testable without l
 - Added package-aware Flask template and static asset paths.
 - Added a thin root `app.py` that preserves `python app.py` and exports `app`/`socketio` for deployment discovery.
 - Added `pyproject.toml` to describe the `src` package and package data.
+- Declared the current runtime dependencies in `pyproject.toml` after Vercel reported that Flask was missing during deployment import.
 - Updated characterization tests for the `src` layout.
 - Preserved application behavior; state and Socket.IO ownership were not redesigned in this phase.
 
@@ -40,10 +41,11 @@ Local tests and retained routes pass; application creation is testable without l
 - Root entry-point import and route smoke check passed for `/`, `/control`, `/display`, `/dm`, `/remote`, `/qr`, and `/api/sounds`.
 - `create_app(start_background_task=False)` can be created without starting the timer loop when `PYTHONPATH=src` is configured.
 - All 7 Phase 2 characterization tests pass.
+- Vercel's first Phase 3 deployment exposed `ModuleNotFoundError: No module named 'flask'`; the traceback confirmed that the package path was found but dependencies were not installed from the new project metadata.
 
 ## Remaining handoff check
 
-Deploy the structural refactor to a Vercel preview and confirm that the Flask preset discovers the root `app.py`, package templates/static assets, and Socket.IO routes. Do not combine that deployment check with state or event redesign.
+Deploy the dependency metadata fix to Vercel and confirm that the Flask preset discovers root `app.py`, installs Flask and the other declared dependencies, includes package templates/static assets, and serves Socket.IO routes. Do not combine that deployment check with state or event redesign.
 
 ## Handoff to Phase 04
 

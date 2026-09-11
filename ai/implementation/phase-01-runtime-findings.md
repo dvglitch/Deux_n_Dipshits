@@ -163,4 +163,22 @@ The authenticated project dashboard is now available through the shared browser 
 
 The local runtime model works in one long-lived process. The public deployment renders pages, synchronizes live timer changes between two clients, and restores current state after a client reload using polling fallback. A redeploy produced a ready replacement deployment that continued to serve and synchronize correctly. Vercel's Fluid Compute setting is enabled and may help preserve a process for longer. The remaining limitation is that an active timer was not present before the redeploy, so active-state reset versus persistence was not directly observed. The current provisional outcome is **Supported with polling limitations; active-state lifecycle behavior needs one targeted test if the distinction matters**.
 
-Current phase outcome: **Pending Vercel evidence**.
+## Phase 03 deployment incident
+
+After the Phase 03 source-package deployment from commit `03329d8`, Vercel runtime logs reported:
+
+```text
+could not import "app.py"
+...
+File "/var/task/app.py", line 10, in <module>
+   from dnd_clock.app import app, socketio
+File "/var/task/src/dnd_clock/app.py", line 3, in <module>
+   from flask import Flask, jsonify, send_from_directory
+ModuleNotFoundError: No module named 'flask'
+```
+
+The root launcher and `src` package were found correctly, but the deployed environment did not install the runtime dependencies after `pyproject.toml` was introduced. The local environment masked this because Flask was already installed globally.
+
+Resolution applied locally: declare the existing runtime dependencies in `pyproject.toml` as well as retaining `requirements.txt`. The dependency metadata parses successfully and all 7 characterization tests pass locally. A new deployment is required to validate the fix.
+
+Current phase outcome: **Pending redeploy validation after dependency metadata fix**.

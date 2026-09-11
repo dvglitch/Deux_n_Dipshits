@@ -7,6 +7,16 @@ name = "dnd-clock"
 version = "0.1.0"
 description = "Cooldown-based DnD combat support application"
 requires-python = ">=3.11"
+dependencies = [
+	"Flask==3.0.3",
+	"Flask-SocketIO==5.3.6",
+	"python-socketio==5.11.4",
+	"python-engineio==4.10.1",
+	"Werkzeug==3.0.4",
+	"qrcode==7.4.2",
+	"Pillow==10.3.0",
+	"pyinstaller==6.11.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
