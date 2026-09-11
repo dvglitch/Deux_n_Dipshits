@@ -1,5 +1,5 @@
 import time
-from persistence import load_settings, save_settings
+from .persistence import load_settings, save_settings
 
 # Load settings from persistence
 settings = load_settings()

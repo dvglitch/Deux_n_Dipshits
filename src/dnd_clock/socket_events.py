@@ -1,5 +1,5 @@
-import timers as tm
-import game_logic as gl
+from . import game_logic as gl
+from . import timers as tm
 
 def register_socket_events(socketio):
 

@@ -1,5 +1,5 @@
 import time
-import timers as tm
+from . import timers as tm
 
 def calculate_initiatives(mode, interval, ranks, min_seconds=None, max_seconds=None):
     """Business logic for initiative sorting and math"""

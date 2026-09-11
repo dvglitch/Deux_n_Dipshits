@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, send_file, request
 import qrcode
 import io
-from utils import get_local_ip
+from ..utils import get_local_ip
 
 qr_bp = Blueprint("qr", __name__)
 

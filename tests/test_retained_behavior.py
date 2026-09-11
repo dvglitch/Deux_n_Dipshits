@@ -2,9 +2,12 @@ import copy
 import unittest
 from unittest.mock import patch
 
-import game_logic
-import persistence
-import timers
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from dnd_clock import game_logic, persistence, timers
 
 
 class TimerBehaviorTests(unittest.TestCase):
