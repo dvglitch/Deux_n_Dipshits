@@ -1,6 +1,6 @@
 # Phase 03 - Source Package Refactor
 
-Status: Local structural refactor complete; Vercel redeploy validation pending after dependency metadata fix.
+Status: Complete.
 
 ## Objective
 Move application code under `src/dnd_clock/` and keep the root `app.py` a thin local entry point without changing intended behavior.
@@ -45,7 +45,7 @@ Local tests and retained routes pass; application creation is testable without l
 
 ## Remaining handoff check
 
-Deploy the dependency metadata fix to Vercel and confirm that the Flask preset discovers root `app.py`, installs Flask and the other declared dependencies, includes package templates/static assets, and serves Socket.IO routes. Do not combine that deployment check with state or event redesign.
+The dependency metadata fix was deployed successfully. The user confirmed that deployment, pages, and timer functionality work as expected. The Flask preset now discovers the root `app.py`, installs the declared dependencies, and serves the reorganized application successfully.
 
 ## Handoff to Phase 04
 

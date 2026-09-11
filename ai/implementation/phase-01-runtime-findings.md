@@ -1,7 +1,7 @@
 # Phase 01 Runtime Findings
 
 Date: 2026-09-09
-Status: Local checks complete; Vercel configuration inspected; cross-client synchronization and reconnect checks pass; redeploy smoke check passes; active-state restart persistence remains unproven.
+Status: Complete with polling limitation; active-state restart persistence remains unproven and is accepted as disposable behavior.
 
 ## Public deployment identified
 
@@ -181,4 +181,6 @@ The root launcher and `src` package were found correctly, but the deployed envir
 
 Resolution applied locally: declare the existing runtime dependencies in `pyproject.toml` as well as retaining `requirements.txt`. The dependency metadata parses successfully and all 7 characterization tests pass locally. A new deployment is required to validate the fix.
 
-Current phase outcome: **Pending redeploy validation after dependency metadata fix**.
+Post-fix redeploy validation was confirmed by the user: deployment, pages, and timer functionality work as expected.
+
+Current phase outcome: **Complete with polling limitation**.
