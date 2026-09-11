@@ -32,6 +32,8 @@ python -m unittest discover -s tests -v
 
 Result: 7 tests passed.
 
+The test command is intended to become a required GitHub Actions check. The current Phase 02 work does not add the workflow yet because the existing `build.yml` is still the obsolete PyInstaller release pipeline; Phase 07 should replace it with a focused test workflow before removing the old release automation.
+
 The current application has important ownership problems intentionally preserved for later phases: `timers.py` owns global runtime state and persistence serialization, Socket.IO handlers mutate that state directly, and many changes rely on the background loop for synchronization. These are characterization findings, not Phase 02 fixes.
 
 ## Handoff

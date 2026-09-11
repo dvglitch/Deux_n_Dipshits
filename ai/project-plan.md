@@ -83,6 +83,7 @@ A server restart or deployment may clear disposable state. Starting a session is
 - Prefer small, explicit abstractions over a large framework or generic admin system.
 - Treat free-tier service limits and deployment behavior as hard constraints.
 - Preserve the background theme, timer-complete sound, and hand-raise sound where practical.
+- Run the Python test suite automatically in GitHub Actions on pushes and pull requests. A failed test should fail the check; branch protection can then make that check required before merging to `main`.
 
 ## Phase 0: Confirm scope and protect the baseline
 
@@ -211,6 +212,7 @@ Phase 1.
 ### Success criteria
 
 - Tests run from a documented local command.
+- The test command runs non-interactively in CI and returns a failing exit code when a test fails.
 - The retained cooldown behavior has executable protection.
 - We can identify where each current piece of state is read, mutated, persisted, and broadcast.
 - No major refactor begins while important behavior remains completely unobserved.
@@ -450,6 +452,7 @@ Reduce feature and deployment clutter only after the retained cooldown behavior 
 - Remove `DnD-Clock.spec`.
 - Remove `start-tunnel.py` if no longer needed.
 - Remove or disable `.github/workflows/build.yml` release builds.
+- Replace the obsolete release workflow with a focused test workflow, or add the test workflow before deleting the release workflow so every change continues to run the Python suite.
 - Remove PyInstaller from requirements.
 - Remove tracked `dist/` artifacts and update ignore rules as appropriate.
 - Preserve the general application separately if the old mode remains valuable there.
@@ -472,6 +475,7 @@ Phases 2, 3, 4, and 6. Deployment verification from Phase 1 must be complete.
 - Local debugging still works with `python app.py`.
 - Vercel deployment still builds after cleanup.
 - No required asset or sound behavior is lost.
+- GitHub reports the automated test check for pushes and pull requests; configure branch protection to require it before merging when available.
 
 ## Phase 8: Session Control and Campaign Maintenance modes
 
@@ -785,6 +789,7 @@ Make the finished project understandable and remove obsolete distribution assump
 - Document campaign maintenance workflows.
 - Remove obsolete build instructions, executable instructions, and Cloudflare tunnel instructions if no longer supported.
 - Remove or disable obsolete GitHub release automation.
+- Document the GitHub Actions test workflow and the local test command.
 - Remove unused dependencies and dead files after verifying no references remain.
 
 ### Dependencies
