@@ -14,6 +14,7 @@ These documents turn [project-plan.md](../project-plan.md) into phase-level work
 
 - [Phase 00 - Baseline](phase-00-baseline.md)
 - [Phase 01 - Deployment Spike](phase-01-deployment-spike.md)
+- [Phase 01 - Runtime Findings](phase-01-runtime-findings.md)
 - [Phase 02 - Characterization](phase-02-characterization.md)
 - [Phase 03 - Source Refactor](phase-03-source-refactor.md)
 - [Phase 04 - State Boundaries](phase-04-state-boundaries.md)
