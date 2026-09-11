@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: dnd-clock
+Version: 0.1.0
+Summary: Cooldown-based DnD combat support application
+Requires-Python: >=3.11
+Requires-Dist: Flask==3.1.3
+Requires-Dist: Flask-SocketIO==5.6.1
+Requires-Dist: python-socketio==5.16.1
+Requires-Dist: python-engineio==4.13.1
+Requires-Dist: Werkzeug==3.1.6
+Requires-Dist: qrcode==8.2
+Requires-Dist: Pillow==12.0.0
+Requires-Dist: psycopg[binary]==3.2.13
+Requires-Dist: python-dotenv==1.0.1

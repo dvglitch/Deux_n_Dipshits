@@ -9,6 +9,8 @@ from .routes.dm import dm_bp
 from .routes.home import home_bp
 from .routes.qr import qr_bp
 from .routes.remote import remote_bp
+from .database.factory import create_campaign_repository
+from .database.repositories import RepositoryError
 from .socket_events import register_socket_events
 from .timers import timer_loop
 
@@ -57,6 +59,20 @@ def create_app(start_background_task=True):
             if path.suffix.lower() in {".mp3", ".wav", ".ogg"}
         ]
         return jsonify(sorted(files))
+
+    @flask_app.get("/api/persistence/health")
+    def persistence_health():
+        repository = None
+        try:
+            repository = create_campaign_repository()
+            repository.load_collection("player_profiles")
+            return jsonify({"database": "ok"})
+        except (RepositoryError, OSError, RuntimeError) as error:
+            flask_app.logger.exception("Persistence health check failed: %s", error)
+            return jsonify({"database": "error"}), 503
+        finally:
+            if repository is not None:
+                repository.close()
 
     flask_app.extensions["socketio"] = socketio
     return flask_app, socketio

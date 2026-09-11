@@ -8,6 +8,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from dnd_clock import game_logic, persistence, timers
+from dnd_clock.database.repositories import RepositoryError, SQLiteCampaignRepository
+from dnd_clock.database.factory import create_campaign_repository
 from dnd_clock.domain.state import migrate_legacy_settings, reset_combat, start_session
 
 
@@ -201,6 +203,62 @@ class StateBoundaryTests(unittest.TestCase):
         self.assertEqual(state.session.selected_display_tab, "objectives")
         self.assertFalse(state.combat.timers)
         self.assertFalse(state.combat.current_hp)
+
+
+class CampaignRepositoryTests(unittest.TestCase):
+    def setUp(self):
+        self.repository = SQLiteCampaignRepository()
+
+    def tearDown(self):
+        self.repository.close()
+
+    def test_campaign_collection_round_trip(self):
+        records = [{"id": "angel", "name": "Angel", "max_hp": 30}]
+
+        self.repository.save_collection("player_profiles", records)
+
+        self.assertEqual(self.repository.load_collection("player_profiles"), records)
+
+    def test_campaign_collections_are_isolated(self):
+        self.repository.save_collection("spells", [{"id": "shield", "level": 1}])
+
+        self.assertEqual(self.repository.load_collection("player_profiles"), [])
+        self.assertEqual(self.repository.load_collection("spells")[0]["id"], "shield")
+
+    def test_invalid_collection_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.repository.load_collection("combat_state")
+
+    def test_save_replaces_a_collection_atomically(self):
+        self.repository.save_collection("objectives", [{"id": "old"}])
+        self.repository.save_collection("objectives", [{"id": "new"}])
+
+        self.assertEqual(self.repository.load_collection("objectives"), [{"id": "new"}])
+
+    def test_factory_uses_sqlite_without_database_configuration(self):
+        repository = create_campaign_repository(database_url_override="")
+        try:
+            self.assertIsInstance(repository, SQLiteCampaignRepository)
+        finally:
+            repository.close()
+
+    def test_persistence_health_endpoint_reports_database_status(self):
+        from dnd_clock.app import create_app
+
+        class FakeRepository:
+            def load_collection(self, collection):
+                self.collection = collection
+                return []
+
+            def close(self):
+                self.closed = True
+
+        with patch("dnd_clock.app.create_campaign_repository", return_value=FakeRepository()):
+            flask_app, _ = create_app(start_background_task=False)
+            response = flask_app.test_client().get("/api/persistence/health")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"database": "ok"})
 
 
 if __name__ == "__main__":
