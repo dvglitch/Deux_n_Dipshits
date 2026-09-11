@@ -36,3 +36,10 @@ def save_settings(settings):
             json.dump(settings, f, indent=4)
     except Exception as e:
         print(f"Error saving settings: {e}")
+
+
+def load_application_state():
+    """Load legacy settings into the explicit application-state model."""
+    from .domain.state import migrate_legacy_settings
+
+    return migrate_legacy_settings(load_settings())

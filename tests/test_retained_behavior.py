@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from dnd_clock import game_logic, persistence, timers
+from dnd_clock.domain.state import migrate_legacy_settings, reset_combat, start_session
 
 
 class TimerBehaviorTests(unittest.TestCase):
@@ -138,6 +139,68 @@ class PersistenceTests(unittest.TestCase):
 
         self.assertEqual(loaded["theme"], persistence.DEFAULT_SETTINGS["theme"])
         self.assertEqual(loaded["cooldown_mode"], persistence.DEFAULT_SETTINGS["cooldown_mode"])
+
+
+class StateBoundaryTests(unittest.TestCase):
+    def test_legacy_settings_migrate_without_live_combat_state(self):
+        state = migrate_legacy_settings(
+            {
+                "theme": "forest",
+                "timer_done_sound": "ding.mp3",
+                "hand_raise_sound": "hand.mp3",
+                "cooldown_mode": False,
+                "active_timer_ids": [1],
+                "timer_names": {"1": "Angel"},
+                "timer_cooldown_durations": {"1": 45},
+                "timer_durations": {"1": 90},
+                "timer_show_on_remote": {"1": False},
+                "timers": {"1": {"remaining": 12, "running": True}},
+            }
+        )
+
+        self.assertEqual(state.config.theme, "forest")
+        self.assertEqual(state.config.timer_done_sound, "ding.mp3")
+        self.assertEqual(state.session.timer_templates["1"].name, "Angel")
+        self.assertEqual(state.session.timer_templates["1"].cooldown_duration, 45)
+        self.assertFalse(state.session.timer_templates["1"].show_on_remote)
+        self.assertFalse(state.combat.timers)
+        self.assertFalse(hasattr(state, "cooldown_mode"))
+
+    def test_start_session_restores_resources_and_selects_timers(self):
+        state = migrate_legacy_settings({})
+        state.campaign.player_profiles = {
+            "angel": {"max_hp": 30, "spell_slots_max": {"1": 4, "2": 2}},
+            "inactive": {"max_hp": 20, "spell_slots_max": {"1": 2}},
+        }
+        state.session.active_profile_ids = ["angel"]
+        state.session.selected_display_tab = "objectives"
+        state.combat.timers = {"old": {"remaining": 1}}
+        state.combat.enemies = {"goblin": {"remaining": 2}}
+
+        start_session(state)
+
+        self.assertTrue(state.session.active)
+        self.assertEqual(state.session.selected_display_tab, "timers")
+        self.assertEqual(state.combat.current_hp, {"angel": 30})
+        self.assertEqual(state.combat.spell_slots_remaining, {"angel": {"1": 4, "2": 2}})
+        self.assertFalse(state.combat.timers)
+        self.assertFalse(state.combat.enemies)
+
+    def test_reset_combat_preserves_campaign_and_session(self):
+        state = migrate_legacy_settings({"active_timer_ids": [1]})
+        state.campaign.player_profiles["angel"] = {"max_hp": 30}
+        state.session.active = True
+        state.session.selected_display_tab = "objectives"
+        state.combat.timers = {"1": {"remaining": 0}}
+        state.combat.current_hp = {"angel": 4}
+
+        reset_combat(state)
+
+        self.assertEqual(state.campaign.player_profiles["angel"]["max_hp"], 30)
+        self.assertTrue(state.session.active)
+        self.assertEqual(state.session.selected_display_tab, "objectives")
+        self.assertFalse(state.combat.timers)
+        self.assertFalse(state.combat.current_hp)
 
 
 if __name__ == "__main__":
