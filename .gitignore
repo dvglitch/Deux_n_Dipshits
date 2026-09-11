@@ -23,4 +23,7 @@ ENV/
 # External Binaries
 cloudflared-windows-amd64.exe
 start-tunnel.bat.log
+*.env.*
+.env
+!.env.example
 dist/
