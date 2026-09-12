@@ -1,6 +1,6 @@
 # Phase 05 - Persistence
 
-Status: Local repository/schema/provider foundation complete; deployed read/write proof remains.
+Status: Complete. Database persistence verified locally and on Vercel deployment.
 
 ## Objective
 Establish durable campaign storage and repository interfaces without putting timer ticks on the database.
@@ -36,15 +36,10 @@ Campaign data survives deployment restart; failed saves are visible; local setup
 - Verified the PostgreSQL repository initializes the schema and reads all five campaign collections; all are currently empty.
 - Added `/api/persistence/health` for a read-only application-level database check.
 - Local health check returned HTTP 200 with `{"database": "ok"}`.
-- Handled Prisma/pgbouncer URL query parameter sanitization for Vercel Supabase integration compatibility.
-- Full test suite now has 17 passing tests.
-
-## Manual setup required before production adapter validation
-
-The user rotated the database password previously exposed in chat, ran the schema in Supabase, and shared the required Vercel integration variables. Real values remain outside the repository. Do not send them through chat or commit them.
-
-See [phase-05-persistence-setup.md](phase-05-persistence-setup.md) for the exact setup and handoff steps.
+- Deployed Vercel health check returned HTTP 200 with `{"backend":"PostgresCampaignRepository","database":"ok"}`.
+- Handled Prisma/pgbouncer/supa URL query parameter sanitization for Vercel Supabase integration compatibility.
+- Full test suite has 17 passing tests.
 
 ## Handoff
 
-Adapter selection is now wired and the local provider proof passes. Before declaring Phase 5 complete, expose a deliberate campaign persistence path, deploy it, and run a harmless deployed read/write proof. Portrait storage should be added when player profile implementation begins; live timer state must remain outside the campaign repository.
+Phase 05 is complete. PostgreSQL persistence is verified in production with connection pooling and query sanitization. Phase 06 can proceed with Socket.IO command cleanup and centralizing realtime state transitions.

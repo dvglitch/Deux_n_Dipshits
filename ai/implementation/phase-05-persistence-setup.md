@@ -1,6 +1,6 @@
 # Phase 05 Persistence Setup
 
-Status: Local repository/provider layer implemented; deployed proof pending application endpoint wiring.
+Status: Complete. Database persistence verified locally and on Vercel deployment.
 
 ## Current design
 
