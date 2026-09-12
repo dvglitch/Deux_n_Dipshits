@@ -11,7 +11,7 @@ from .routes.qr import qr_bp
 from .routes.remote import remote_bp
 from .database.factory import create_campaign_repository
 from .database.repositories import RepositoryError
-from .socket_events import register_socket_events
+from .realtime import register_socket_events
 from .timers import timer_loop
 
 

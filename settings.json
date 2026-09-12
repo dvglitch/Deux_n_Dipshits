@@ -35,8 +35,8 @@
         "3": true,
         "4": false
     },
-    "theme": "tavern",
+    "theme": "forest",
     "custom_bg_url": "",
-    "timer_done_sound": "discord-notification.mp3",
+    "timer_done_sound": "ding.mp3",
     "hand_raise_sound": "yippeeee.mp3"
 }
