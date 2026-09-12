@@ -260,6 +260,14 @@ class CampaignRepositoryTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["database"], "ok")
 
+    def test_database_url_sanitizes_prisma_pgbouncer_param(self):
+        from dnd_clock.config import _sanitize_db_url
+
+        raw = "postgresql://user:pass@host:6543/db?sslmode=require&pgbouncer=true"
+        cleaned = _sanitize_db_url(raw)
+        self.assertNotIn("pgbouncer", cleaned)
+        self.assertIn("sslmode=require", cleaned)
+
 
 if __name__ == "__main__":
     unittest.main()

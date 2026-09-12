@@ -36,7 +36,8 @@ Campaign data survives deployment restart; failed saves are visible; local setup
 - Verified the PostgreSQL repository initializes the schema and reads all five campaign collections; all are currently empty.
 - Added `/api/persistence/health` for a read-only application-level database check.
 - Local health check returned HTTP 200 with `{"database": "ok"}`.
-- Full test suite now has 16 passing tests.
+- Handled Prisma/pgbouncer URL query parameter sanitization for Vercel Supabase integration compatibility.
+- Full test suite now has 17 passing tests.
 
 ## Manual setup required before production adapter validation
 
