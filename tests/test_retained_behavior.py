@@ -258,7 +258,7 @@ class CampaignRepositoryTests(unittest.TestCase):
             response = flask_app.test_client().get("/api/persistence/health")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"database": "ok"})
+        self.assertEqual(response.get_json()["database"], "ok")
 
 
 if __name__ == "__main__":

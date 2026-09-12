@@ -66,13 +66,20 @@ def create_app(start_background_task=True):
         try:
             repository = create_campaign_repository()
             repository.load_collection("player_profiles")
-            return jsonify({"database": "ok"})
-        except (RepositoryError, OSError, RuntimeError) as error:
+            return jsonify({"database": "ok", "backend": type(repository).__name__})
+        except Exception as error:
             flask_app.logger.exception("Persistence health check failed: %s", error)
-            return jsonify({"database": "error"}), 503
+            return jsonify({
+                "database": "error",
+                "error_type": type(error).__name__,
+                "error_message": str(error)
+            }), 500
         finally:
             if repository is not None:
-                repository.close()
+                try:
+                    repository.close()
+                except Exception:
+                    pass
 
     flask_app.extensions["socketio"] = socketio
     return flask_app, socketio
