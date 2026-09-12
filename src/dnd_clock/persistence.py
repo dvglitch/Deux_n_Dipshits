@@ -11,7 +11,7 @@ DEFAULT_SETTINGS = {
     "DEFAULT_DURATION": 180,
     "timer_names": {},
     "theme": "tavern",
-    "cooldown_mode": False,
+    "cooldown_mode": True,
     "timer_durations": {}
 }
 

@@ -48,13 +48,6 @@ def register_socket_events(socketio):
             return
         CombatService.set_timer_duration(data["timer"], data["duration"])
 
-    @socketio.on("set_cooldown_mode")
-    def handle_set_cooldown_mode(data):
-        if not isinstance(data, dict) or "cooldown_mode" not in data:
-            return
-        new_state = CombatService.update_control_state("cooldown_mode", bool(data["cooldown_mode"]))
-        socketio.emit("control_update", new_state)
-
     @socketio.on("toggle_all")
     def handle_toggle_all():
         CombatService.toggle_all_timers()

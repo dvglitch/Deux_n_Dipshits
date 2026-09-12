@@ -9,43 +9,37 @@ function formatTime(s) {
 let locked = false;
 let adjustLocked = false;
 let adjustInterval = 30;
-let cooldownMode = false;
+let cooldownMode = true;
 
 function updateCooldownModeUI(isCooldown) {
-    cooldownMode = isCooldown;
-
-    const toggle = document.getElementById("cooldownModeToggle");
-    if (toggle) toggle.checked = cooldownMode;
+    cooldownMode = true;
 
     const modeLabel = document.getElementById("cooldownModeLabel");
     if (modeLabel) {
-        modeLabel.innerText = cooldownMode ? "Cooldown Mode" : "Timer Mode";
+        modeLabel.innerText = "Cooldown Mode";
     }
 
-    // Hide/show default time container
+    // In cooldown mode, hide standard timer default-time controls
     const defaultTimeCol = document.getElementById("default-time-col");
     if (defaultTimeCol) {
-        defaultTimeCol.style.display = cooldownMode ? "none" : "block";
+        defaultTimeCol.style.display = "none";
     }
 
-    // Adjust column spans in Settings Slide Row 2
     const combatantsCol = document.getElementById("combatants-col");
     const masterCol = document.getElementById("master-controls-col");
     const quickAdjCol = document.getElementById("quick-adjust-col");
 
-    if (combatantsCol) combatantsCol.style.gridColumn = cooldownMode ? "span 4" : "span 3";
-    if (masterCol) masterCol.style.gridColumn = cooldownMode ? "span 4" : "span 3";
-    if (quickAdjCol) quickAdjCol.style.gridColumn = cooldownMode ? "span 4" : "span 3";
+    if (combatantsCol) combatantsCol.style.gridColumn = "span 4";
+    if (masterCol) masterCol.style.gridColumn = "span 4";
+    if (quickAdjCol) quickAdjCol.style.gridColumn = "span 4";
 
-    // Toggle Initiative control fields
     const initStandard = document.getElementById("init-standard-controls");
     const initCooldown = document.getElementById("init-cooldown-controls");
-    if (initStandard) initStandard.style.display = cooldownMode ? "none" : "flex";
-    if (initCooldown) initCooldown.style.display = cooldownMode ? "flex" : "none";
+    if (initStandard) initStandard.style.display = "none";
+    if (initCooldown) initCooldown.style.display = "flex";
 
-    // Keep per-timer duration fields visible in both modes, but relabel them.
     document.querySelectorAll("[id^='duration-label-']").forEach((label) => {
-        label.innerText = cooldownMode ? "Default Cooldown:" : "Default Time:";
+        label.innerText = "Default Cooldown:";
     });
 }
                   
@@ -516,12 +510,6 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') showSlide('prev');
 });
 
-function toggleCooldownMode() {
-    const isCooldown = document.getElementById("cooldownModeToggle").checked;
-    updateCooldownModeUI(isCooldown);
-    socket.emit("set_cooldown_mode", {cooldown_mode: isCooldown});
-}
-
 function calculateInitiatives() {
     const ranks = {};
     const ids = Array.from(document.querySelectorAll("[id^='init-rank-']")).map(el => Number(el.id.replace("init-rank-", "")));
@@ -538,16 +526,9 @@ function calculateInitiatives() {
         return;
     }
     
-    if (cooldownMode) {
-        const minVal = parseInt(document.getElementById("initMin").value, 10) || 60;
-        const maxVal = parseInt(document.getElementById("initMax").value, 10) || 120;
-        socket.emit("calculate_initiatives", { ranks, min_seconds: minVal, max_seconds: maxVal });
-    } else {
-        const mode = document.getElementById("initMode").value;
-        const intervalStr = document.getElementById("initInterval").value;
-        const interval = parseInt(intervalStr) || 30;
-        socket.emit("calculate_initiatives", { mode, interval, ranks });
-    }
+    const minVal = parseInt(document.getElementById("initMin")?.value, 10) || 60;
+    const maxVal = parseInt(document.getElementById("initMax")?.value, 10) || 120;
+    socket.emit("calculate_initiatives", { ranks, min_seconds: minVal, max_seconds: maxVal });
 }
 
 async function fetchSounds() {

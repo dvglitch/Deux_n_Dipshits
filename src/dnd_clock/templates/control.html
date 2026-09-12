@@ -9,13 +9,9 @@
             <button id="nav-left" class="nav-btn" onclick="showSlide('prev')" style="position:fixed; top:50%; left:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:0 10px 10px 0; transition: background 0.2s;">&#10094;</button>
             <button id="nav-right" class="nav-btn" onclick="showSlide('next')" style="position:fixed; top:50%; right:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:10px 0 0 10px; transition: background 0.2s;">&#10095;</button>
 
-            <!-- Cooldown Mode Toggle (Top-Left) -->
+            <!-- Cooldown Mode Indicator (Top-Left) -->
             <div style="position:absolute; top:20px; left:20px; display:flex; align-items:center; gap:10px; z-index:1001;">
-                <label class="switch">
-                    <input type="checkbox" id="cooldownModeToggle" onchange="toggleCooldownMode()">
-                    <span class="slider"></span>
-                </label>
-                <span id="cooldownModeLabel" style="font-size:14px; font-weight:bold; color:#d4af37; text-shadow:1px 1px 2px black;">Timer Mode</span>
+                <span id="cooldownModeLabel" style="font-size:14px; font-weight:bold; color:#d4af37; text-shadow:1px 1px 2px black;">Cooldown Mode</span>
             </div>
 
             <div class="help-container control-help-container">

@@ -1,8 +1,11 @@
 import time
 from . import timers as tm
 
-def calculate_initiatives(mode, interval, ranks, min_seconds=None, max_seconds=None):
-    """Business logic for initiative sorting and math"""
+def calculate_initiatives(mode="proportional", interval=30, ranks=None, min_seconds=None, max_seconds=None):
+    """Business logic for initiative sorting and assigning cooldowns.
+    
+    In cooldown combat: Lower initiative rank gets shorter cooldown (acts more frequently).
+    """
     if not ranks:
         return None
         
@@ -10,8 +13,7 @@ def calculate_initiatives(mode, interval, ranks, min_seconds=None, max_seconds=N
     if not valid_ranks:
         return None
 
-    # If in cooldown mode and min/max cooldowns are provided
-    if tm.control_state.get("cooldown_mode", False) and min_seconds is not None and max_seconds is not None:
+    if min_seconds is not None and max_seconds is not None:
         # Lower initiative numbers should get lower cooldowns.
         unique_ranks = sorted(list(set(valid_ranks.values())))
         num_unique = len(unique_ranks)
@@ -27,6 +29,7 @@ def calculate_initiatives(mode, interval, ranks, min_seconds=None, max_seconds=N
                 
             t["remaining"] = 0
             t["duration"] = int(time_val)
+            t["cooldown_duration"] = int(time_val)
             t["running"] = False
             t["last_update"] = now
             t["finished"] = True
@@ -40,27 +43,17 @@ def calculate_initiatives(mode, interval, ranks, min_seconds=None, max_seconds=N
     max_rank = max(valid_ranks.values())
     min_rank = min(valid_ranks.values())
     
-    control_updated = False
-    if mode == "interval":
-        new_max_time = (max_rank - min_rank) * interval if max_rank > min_rank else 0
-        if new_max_time > 0:
-            tm.DEFAULT_DURATION = new_max_time
-            tm.control_state["DEFAULT_DURATION"] = tm.DEFAULT_DURATION
-            control_updated = True
-            
     now = time.time()
     for k_int, rank in valid_ranks.items():
         t = tm.timers[k_int]
-        if mode == "proportional":
-            if max_rank > min_rank:
-                time_val = (rank - min_rank) / (max_rank - min_rank) * tm.DEFAULT_DURATION
-            else:
-                time_val = 0
+        if max_rank > min_rank:
+            time_val = (rank - min_rank) / (max_rank - min_rank) * tm.DEFAULT_DURATION
         else:
-            time_val = (rank - min_rank) * interval
+            time_val = 0
             
         t["remaining"] = int(time_val)
         t["duration"] = tm.DEFAULT_DURATION
+        t["cooldown_duration"] = tm.DEFAULT_DURATION
         t["running"] = False
         t["last_update"] = now
         t["finished"] = False
@@ -69,4 +62,4 @@ def calculate_initiatives(mode, interval, ranks, min_seconds=None, max_seconds=N
             tm.finish_order.remove(k_int)
             
     tm.save_current_state()
-    return tm.control_state if control_updated else None
+    return None
