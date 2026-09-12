@@ -263,9 +263,10 @@ class CampaignRepositoryTests(unittest.TestCase):
     def test_database_url_sanitizes_prisma_pgbouncer_param(self):
         from dnd_clock.config import _sanitize_db_url
 
-        raw = "postgresql://user:pass@host:6543/db?sslmode=require&pgbouncer=true"
+        raw = "postgresql://user:pass@host:6543/db?sslmode=require&pgbouncer=true&supa=base-pooler.x"
         cleaned = _sanitize_db_url(raw)
         self.assertNotIn("pgbouncer", cleaned)
+        self.assertNotIn("supa", cleaned)
         self.assertIn("sslmode=require", cleaned)
 
 

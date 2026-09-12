@@ -8,6 +8,44 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
+# Standard libpq connection parameters recognized by psycopg
+VALID_LIBPQ_PARAMS = {
+    "host",
+    "hostaddr",
+    "port",
+    "dbname",
+    "user",
+    "password",
+    "passfile",
+    "channel_binding",
+    "connect_timeout",
+    "client_encoding",
+    "options",
+    "application_name",
+    "fallback_application_name",
+    "keepalives",
+    "keepalives_idle",
+    "keepalives_interval",
+    "keepalives_count",
+    "tcp_user_timeout",
+    "sslmode",
+    "sslcompression",
+    "sslcert",
+    "sslkey",
+    "sslrootcert",
+    "sslcrl",
+    "sslcrlpath",
+    "sslsni",
+    "requirepeer",
+    "ssl_min_protocol_version",
+    "ssl_max_protocol_version",
+    "gssencmode",
+    "krbsrvname",
+    "gssdelegation",
+    "target_session_attrs",
+    "load_balance_hosts",
+}
+
 
 def _sanitize_db_url(url: str | None) -> str | None:
     if not url:
@@ -16,9 +54,11 @@ def _sanitize_db_url(url: str | None) -> str | None:
     if not parsed.query:
         return url
     query_params = parse_qs(parsed.query)
-    # Remove parameters that Prisma uses but psycopg rejects
-    query_params.pop("pgbouncer", None)
-    new_query = urlencode(query_params, doseq=True)
+    # Only keep valid libpq parameters; drop custom provider params like pgbouncer, supa, etc.
+    cleaned_params = {
+        k: v for k, v in query_params.items() if k.lower() in VALID_LIBPQ_PARAMS
+    }
+    new_query = urlencode(cleaned_params, doseq=True)
     return urlunparse(parsed._replace(query=new_query))
 
 
