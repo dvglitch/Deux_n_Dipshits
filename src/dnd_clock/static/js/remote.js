@@ -1,14 +1,13 @@
 const socket = io();
 
 let timers = {};
-let expanded = null;
+let selectedTimerId = localStorage.getItem("dnd_player_timer_id") ? Number(localStorage.getItem("dnd_player_timer_id")) : null;
+let currentRemoteView = "cooldown";
 let locked = false;
-let adjustLocked = false;
-let numTimers = 6;
-let adjustInterval = 30;
+let allSpells = [];
+let currentViewingSpell = null;
 
 let prevTimers = {};
-let muteFeedback = localStorage.getItem("mute_remote_feedback") === "true";
 let selectedTimerSound = "synthetic";
 
 // Audio Controller for reliable playback
@@ -24,8 +23,6 @@ const AudioController = {
             this.audioCtx.resume();
         }
         this.unlocked = true;
-        console.log("Audio system unlocked");
-        this.updateUnlockUI();
     },
 
     setTimerSound(sound) {
@@ -33,7 +30,7 @@ const AudioController = {
             this.timerAudio = null;
         } else {
             this.timerAudio = new Audio(`/static/sounds/${sound}`);
-            this.timerAudio.load(); // Pre-load
+            this.timerAudio.load();
         }
     },
 
@@ -41,9 +38,7 @@ const AudioController = {
         if (type === 'timer' && navigator.vibrate) {
             navigator.vibrate(200);
         }
-
-        if (muteFeedback) return;
-        this.init(); // Ensure initialized on first play if not already
+        this.init();
 
         if (type === 'timer') {
             if (this.timerAudio) {
@@ -67,33 +62,10 @@ const AudioController = {
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.8);
         osc.start();
         osc.stop(this.audioCtx.currentTime + 0.8);
-    },
-
-    updateUnlockUI() {
-        const indicator = document.getElementById("audio-status");
-        if (indicator) {
-            let statusText = this.unlocked ? "🟢 Audio Ready" : "🔴 Click to Sync Audio";
-            const hapticStatus = navigator.vibrate ? "📱 Haptics: ✅ Ready" : "📱 Haptics: ❌ Unsupported";
-            indicator.innerHTML = `${statusText}<br><span style="font-size:10px; opacity:0.7;">${hapticStatus}</span>`;
-            indicator.style.color = this.unlocked ? "#4CAF50" : "#ff4444";
-        }
     }
 };
 
-// Global click to unlock audio
 window.addEventListener('click', () => AudioController.init(), { once: false });
-
-// Feedback sound and haptics (legacy wrapper)
-function playFeedback(type) {
-    AudioController.play(type);
-}
-
-function toggleMute() {
-    muteFeedback = !muteFeedback;
-    localStorage.setItem("mute_remote_feedback", muteFeedback);
-    const btn = document.getElementById("mute-btn");
-    if (btn) btn.innerText = muteFeedback ? "🔇 Muted" : "🔔 Alerts On";
-}
 
 function formatTime(s) {
     let m = Math.floor(s / 60);
@@ -101,25 +73,25 @@ function formatTime(s) {
     return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
+// Socket Listeners
 socket.on("update", (data) => {
-    // Check for expanded timer completion
-    if (expanded !== null && data[expanded] && prevTimers[expanded]) {
-        const t = data[expanded];
-        const pt = prevTimers[expanded];
+    // Check if selected player's cooldown hit zero
+    if (selectedTimerId !== null && data[selectedTimerId] && prevTimers[selectedTimerId]) {
+        const t = data[selectedTimerId];
+        const pt = prevTimers[selectedTimerId];
         if (t.remaining <= 0 && pt.remaining > 0) {
-            playFeedback('timer');
+            AudioController.play('timer');
         }
     }
     timers = data;
     prevTimers = JSON.parse(JSON.stringify(data));
-    renderTimers();
+    renderPlayerDropdown();
+    renderActiveCooldownView();
+    renderResourcesView();
 });
 
 socket.on("control_update", (data) => {
-    locked = data.locked;
-    adjustLocked = data.adjust_locked || false;
-    adjustInterval = data.adjust_interval || 30;
-    numTimers = data.num_timers || 6;
+    locked = Boolean(data.locked);
     
     if (data.theme) {
         document.body.className = `theme-${data.theme} page-remote`;
@@ -134,8 +106,8 @@ socket.on("control_update", (data) => {
         AudioController.setTimerSound(data.timer_done_sound);
     }
 
-    document.body.style.opacity = locked ? 0.5 : 1;
-    renderTimers();
+    document.body.style.opacity = locked ? 0.7 : 1;
+    renderActiveCooldownView();
 });
 
 function applyCustomBg(url) {
@@ -149,190 +121,347 @@ function applyCustomBg(url) {
     }
 }
 
-function toggleExpand(i) {
-    // If touching the already expanded tab, collapse it
-    if (expanded === i) {
-        expanded = null;
+// Switch Bottom Tabs
+function switchRemoteView(view) {
+    currentRemoteView = view;
+    document.querySelectorAll('.remote-nav-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.remote-view').forEach(v => v.style.display = 'none');
+
+    const activeBtn = document.getElementById(`nav-btn-${view}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    const targetView = document.getElementById(`view-${view}`);
+    if (targetView) targetView.style.display = 'block';
+
+    if (view === 'spellbook') {
+        loadSpellbook();
+    } else if (view === 'resources') {
+        renderResourcesView();
     } else {
-        expanded = i;
+        renderActiveCooldownView();
     }
-    renderTimers();
 }
 
-function renderTimers() {
-    const container = document.getElementById("timers");
+// 1. Dropdown & Selection
+function renderPlayerDropdown() {
+    const select = document.getElementById("player-selector");
+    if (!select) return;
 
-    // Feedback Toggle Header
-    let settingsBar = document.getElementById("feedback-settings");
-    if (!settingsBar) {
-        settingsBar = document.createElement("div");
-        settingsBar.id = "feedback-settings";
-        settingsBar.style = "display:flex; justify-content:space-between; align-items:center; padding:0 10px 10px 10px; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1);";
-        settingsBar.innerHTML = `
-            <div id="audio-status" style="font-size:11px; font-weight:bold; color:#ff4444; opacity:0.8;">🔴 Click to Sync Audio</div>
-            <button id="mute-btn" onclick="toggleMute()" style="font-size:12px; padding:5px 12px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); border-radius:15px; color:white; cursor:pointer; width:auto; margin:0;">
-                ${muteFeedback ? "🔇 Muted" : "🔔 Alerts On"}
-            </button>
-        `;
-        container.parentElement.insertBefore(settingsBar, container);
-        AudioController.updateUnlockUI();
-    }
-
-    let ids = Object.keys(timers)
+    const playerIds = Object.keys(timers)
         .map(Number)
         .sort((a, b) => a - b)
-        .filter(id => timers[id] && timers[id].show_on_remote !== false);
+        .filter(id => !timers[id].is_enemy && timers[id].show_on_remote !== false);
 
-    // Remove timers that are no longer in the list or hidden due to focus mode
-    Array.from(container.children).forEach(child => {
-        const idNum = Number(child.id.replace("timer-card-", ""));
-        if (!ids.includes(idNum) || (expanded !== null && expanded !== idNum)) {
-            child.remove();
+    const currentVal = select.value;
+    select.innerHTML = `<option value="">-- Choose Your Character --</option>` + playerIds.map(id => {
+        const t = timers[id];
+        const label = t.character_name ? `${t.name} (${t.character_name})` : t.name;
+        return `<option value="${id}">${label}</option>`;
+    }).join("");
+
+    if (selectedTimerId && playerIds.includes(selectedTimerId)) {
+        select.value = String(selectedTimerId);
+    } else if (playerIds.length === 1 && !selectedTimerId) {
+        selectedTimerId = playerIds[0];
+        localStorage.setItem("dnd_player_timer_id", selectedTimerId);
+        select.value = String(selectedTimerId);
+    } else if (currentVal) {
+        select.value = currentVal;
+    }
+}
+
+function onPlayerSelected(val) {
+    if (!val) {
+        selectedTimerId = null;
+        localStorage.removeItem("dnd_player_timer_id");
+    } else {
+        selectedTimerId = Number(val);
+        localStorage.setItem("dnd_player_timer_id", selectedTimerId);
+    }
+    renderActiveCooldownView();
+    renderResourcesView();
+}
+
+// 2. Cooldown View Rendering
+function renderActiveCooldownView() {
+    const activePanel = document.getElementById("cooldown-active-panel");
+    const noPlayerMsg = document.getElementById("no-player-selected-msg");
+
+    if (!selectedTimerId || !timers[selectedTimerId]) {
+        if (activePanel) activePanel.style.display = "none";
+        if (noPlayerMsg) noPlayerMsg.style.display = "block";
+        return;
+    }
+
+    if (activePanel) activePanel.style.display = "block";
+    if (noPlayerMsg) noPlayerMsg.style.display = "none";
+
+    const t = timers[selectedTimerId];
+    const card = document.getElementById("hero-cooldown-card");
+    const nameEl = document.getElementById("player-hero-name");
+    const charEl = document.getElementById("player-hero-char");
+    const timeEl = document.getElementById("player-hero-time");
+    const statusEl = document.getElementById("player-hero-status");
+    const hpText = document.getElementById("hero-hp-text");
+    const hpBar = document.getElementById("hero-hp-bar");
+    const condBadge = document.getElementById("hero-condition-badge");
+    const resetBtn = document.getElementById("btn-reset-action");
+    const toggleBtn = document.getElementById("btn-toggle-timer");
+    const handBtn = document.getElementById("btn-raise-hand");
+
+    const accentColor = t.accent_color || "#d4af37";
+    if (card) {
+        card.style.borderColor = accentColor;
+        card.style.boxShadow = `0 10px 30px rgba(0,0,0,0.7), inset 0 0 0 1px ${accentColor}40`;
+    }
+
+    if (nameEl) nameEl.textContent = t.name;
+    if (charEl) charEl.textContent = t.character_name || "";
+
+    const timeStr = formatTime(t.remaining);
+    if (timeEl) {
+        timeEl.textContent = timeStr;
+        if (t.remaining <= 0) {
+            timeEl.style.color = "#2ecc71";
+        } else if (t.running) {
+            timeEl.style.color = "#ffffff";
+        } else {
+            timeEl.style.color = "#f39c12";
         }
+    }
+
+    if (statusEl) {
+        const isReady = t.remaining <= 0;
+        statusEl.textContent = isReady ? "READY TO ACT" : (t.running ? "COOLING DOWN" : "PAUSED");
+        statusEl.style.color = isReady ? "#2ecc71" : (t.running ? "#3498db" : "#f39c12");
+    }
+
+    // HP Bar
+    const curHp = t.current_hp !== undefined ? t.current_hp : 30;
+    const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
+    const hpPct = Math.max(0, Math.min(100, (curHp / Math.max(1, maxHp)) * 100));
+    if (hpText) hpText.textContent = `HP: ${curHp}/${maxHp}`;
+    if (hpBar) {
+        hpBar.style.width = `${hpPct}%`;
+        hpBar.style.background = hpPct <= 25 ? "#e74c3c" : (hpPct <= 50 ? "#f39c12" : "#2ecc71");
+    }
+
+    // Condition
+    if (condBadge) {
+        if (t.condition) {
+            condBadge.style.display = "block";
+            condBadge.textContent = `⚠️ Condition: ${t.condition}`;
+        } else {
+            condBadge.style.display = "none";
+        }
+    }
+
+    // Hand raise
+    if (handBtn) {
+        handBtn.textContent = t.raised_hand ? "✋ Lower Hand" : "✋ Raise Hand";
+        handBtn.style.background = t.raised_hand ? "rgba(212, 175, 55, 0.5)" : "rgba(218, 165, 32, 0.15)";
+    }
+
+    // Toggle button
+    if (toggleBtn) {
+        toggleBtn.textContent = t.running ? "⏸ Pause" : "▶ Start";
+    }
+}
+
+// 3. Player Actions
+function playerResetAction() {
+    if (!selectedTimerId || locked) return;
+    socket.emit("reset", {timer: selectedTimerId, start: true});
+    AudioController.init();
+}
+
+function playerToggleTimer() {
+    if (!selectedTimerId || locked) return;
+    socket.emit("toggle", {timer: selectedTimerId});
+}
+
+function playerToggleHand() {
+    if (!selectedTimerId || locked) return;
+    socket.emit("toggle_hand", {timer: selectedTimerId});
+}
+
+// 4. Resources View (HP & Spell Slots)
+function renderResourcesView() {
+    if (!selectedTimerId || !timers[selectedTimerId]) return;
+    const t = timers[selectedTimerId];
+
+    // HP
+    const curHp = t.current_hp !== undefined ? t.current_hp : 30;
+    const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
+    const hpPct = Math.max(0, Math.min(100, (curHp / Math.max(1, maxHp)) * 100));
+
+    const hpLabel = document.getElementById("resource-hp-label");
+    const hpBar = document.getElementById("resource-hp-bar");
+    if (hpLabel) hpLabel.textContent = `${curHp} / ${maxHp} HP`;
+    if (hpBar) {
+        hpBar.style.width = `${hpPct}%`;
+        hpBar.style.background = hpPct <= 25 ? "#e74c3c" : (hpPct <= 50 ? "#f39c12" : "#2ecc71");
+    }
+
+    // Spell Slots
+    const slotsContainer = document.getElementById("spell-slots-container");
+    if (!slotsContainer) return;
+
+    const slots = t.spell_slots || {
+        "1": {"current": 4, "max": 4},
+        "2": {"current": 3, "max": 3},
+        "3": {"current": 2, "max": 2}
+    };
+
+    const levels = Object.keys(slots).sort((a, b) => Number(a) - Number(b));
+    if (levels.length === 0) {
+        slotsContainer.innerHTML = `<div style="color:#888; font-size:14px; text-align:center;">No spell slots configured.</div>`;
+        return;
+    }
+
+    slotsContainer.innerHTML = levels.map(lvl => {
+        const info = slots[lvl];
+        const cur = info.current !== undefined ? info.current : 0;
+        const max = info.max !== undefined ? info.max : 0;
+        const levelLabel = lvl === "0" ? "Cantrips" : (lvl === "1" ? "1st Level" : (lvl === "2" ? "2nd Level" : (lvl === "3" ? "3rd Level" : `${lvl}th Level`)));
+
+        let bubbles = "";
+        for (let i = 1; i <= max; i++) {
+            const isFilled = i <= cur;
+            bubbles += `<span class="slot-bubble ${isFilled ? 'filled' : 'spent'}" onclick="toggleSingleSlot('${lvl}', ${i})">${isFilled ? '●' : '○'}</span>`;
+        }
+
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:8px;">
+                <div style="font-weight:bold; font-size:14px; color:#d4af37;">${levelLabel} <span style="font-size:12px; opacity:0.8;">(${cur}/${max})</span></div>
+                <div style="display:flex; align-items:center;">
+                    ${bubbles}
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function changePlayerHp(delta) {
+    if (!selectedTimerId || !timers[selectedTimerId]) return;
+    const t = timers[selectedTimerId];
+    const curHp = t.current_hp !== undefined ? t.current_hp : 30;
+    const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
+    const newHp = Math.max(0, Math.min(maxHp, curHp + delta));
+    socket.emit("set_hp", {timer: selectedTimerId, current_hp: newHp, max_hp: maxHp});
+}
+
+function toggleSingleSlot(level, index) {
+    if (!selectedTimerId || !timers[selectedTimerId]) return;
+    const t = timers[selectedTimerId];
+    const slots = t.spell_slots || {};
+    const info = slots[level] || {current: 4, max: 4};
+    const cur = info.current !== undefined ? info.current : 4;
+    
+    // If tapping an active bubble, expend it; if tapping spent bubble, restore it
+    const newCurrent = (index <= cur) ? (index - 1) : index;
+    socket.emit("set_spell_slot", {
+        timer: selectedTimerId,
+        level: level,
+        current: Math.max(0, Math.min(info.max || 4, newCurrent))
+    });
+}
+
+function restoreAllPlayerSlots() {
+    if (!selectedTimerId) return;
+    socket.emit("restore_all_slots", {timer: selectedTimerId});
+}
+
+// 5. Spellbook View & Detail Modal
+async function loadSpellbook() {
+    try {
+        const res = await fetch("/api/campaign/spells");
+        const data = await res.json();
+        allSpells = data.records || [];
+        filterSpellList(document.getElementById("spell-search-input")?.value || "");
+    } catch (e) {
+        console.error("Failed to load spells:", e);
+    }
+}
+
+function filterSpellList(query) {
+    const container = document.getElementById("spell-list-container");
+    if (!container) return;
+
+    const q = (query || "").trim().toLowerCase();
+    const filtered = allSpells.filter(s => {
+        if (!q) return true;
+        return (s.name || "").toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q);
     });
 
-    for (let i of ids) {
-        const t = timers[i];
-        if (!t) continue;
+    if (filtered.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:#888; padding:30px;">No spells found matching "${query}".</div>`;
+        return;
+    }
 
-        const isExp = (expanded === i);
-        
-        // Focus Mode: Hide all other timers if one is expanded
-        if (expanded !== null && !isExp) continue;
-
-        let cardClass = "timer-card";
-        if (t.running) cardClass += " running";
-        if (t.remaining <= 0) cardClass += " finished";
-        
-        const timeStr = formatTime(t.remaining);
-
-        let card = document.getElementById(`timer-card-${i}`);
-        let currentState = card ? card.getAttribute("data-expanded") === "true" : null;
-
-        if (!card || currentState !== isExp) {
-            if (card) card.remove();
-            card = document.createElement("div");
-            card.id = `timer-card-${i}`;
-            card.setAttribute("data-expanded", isExp);
-            container.appendChild(card);
-
-            let html = `
-                <div class="timer-header" onclick="toggleExpand(${i})">
-                    <div class="name-disp" style="font-size:22px; text-shadow:1px 1px 2px black;">${t.name}</div>
-                    <div class="time-disp" style="font-size:26px; font-variant-numeric: tabular-nums; text-shadow:1px 1px 2px black;"></div>
+    container.innerHTML = filtered.map((s, idx) => {
+        const levelLabel = s.level === 0 ? "Cantrip" : `Lvl ${s.level}`;
+        const concTag = s.concentration ? `<span style="font-size:10px; background:#f39c12; color:black; padding:2px 5px; border-radius:3px; margin-left:6px; font-weight:bold;">CONC</span>` : "";
+        return `
+            <div class="timer-card" style="margin:0; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;" onclick="openSpellDetailModal(${idx})">
+                <div>
+                    <div style="font-weight:bold; font-size:16px; color:#f5f5f5;">${s.name} ${concTag}</div>
+                    <div style="font-size:12px; color:#aaa; margin-top:2px;">${levelLabel} • ${s.duration || '1 action'}</div>
                 </div>
-            `;
+                <div style="font-size:18px; color:#d4af37;">❯</div>
+            </div>
+        `;
+    }).join("");
+}
 
-            if (isExp) {
-                html += `
-                    <div class="timer-body">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:16px;">
-                            <div class="status-disp" style="opacity:0.8; text-transform:uppercase;"></div>
-                            <div class="pos-disp" style="font-weight:bold;"></div>
-                        </div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
-                            <button class="toggle-btn" onclick="toggle(event, ${i})" style="margin:0; width:100%; border:1px solid rgba(255,255,255,0.2); box-sizing:border-box;"></button>
-                            <button onclick="reset(event, ${i})" style="margin:0; width:100%; border:1px solid rgba(255,255,255,0.2); box-sizing:border-box;">Reset</button>
-                        </div>
-                        <div style="display:flex; width:100%; margin-bottom:10px;">
-                            <button class="hand-btn" onclick="toggleHand(event, ${i})" style="flex:1; margin:0; border:1px solid rgba(255,215,0,0.5); background:rgba(218,165,32,0.2); color:gold; box-sizing:border-box;"></button>
-                        </div>
-                        <div class="adj-container" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
-                            <button id="adj-up-btn-${i}" class="adj-btn" style="margin:0; width:100%; background:#444; box-sizing:border-box;">+30s</button>
-                            <button id="adj-down-btn-${i}" class="adj-btn" style="margin:0; width:100%; background:#444; box-sizing:border-box;">-30s</button>
-                        </div>
-                        <div style="display:flex; width:100%;">
-                            <button onclick="toggleExpand(${i})" style="flex:1; margin:0; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.4); box-sizing:border-box;">⬇ Back to List</button>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            card.innerHTML = html;
-        }
+function openSpellDetailModal(spellIndex) {
+    const spell = allSpells[spellIndex];
+    if (!spell) return;
+    currentViewingSpell = spell;
 
-        // Surgical updates
-        card.className = cardClass;
-        card.querySelector('.name-disp').textContent = t.name;
-        card.querySelector('.time-disp').textContent = timeStr;
+    const modal = document.getElementById("spell-detail-modal");
+    document.getElementById("modal-spell-name").textContent = spell.name;
+    document.getElementById("modal-spell-level").textContent = spell.level === 0 ? "Cantrip" : `Level ${spell.level} Spell`;
+    document.getElementById("modal-spell-duration").textContent = spell.duration || "Instantaneous";
+    document.getElementById("modal-spell-concentration").textContent = spell.concentration ? "Yes (Requires Concentration)" : "No";
+    document.getElementById("modal-spell-desc").textContent = spell.description || "No description provided.";
 
-        if (isExp) {
-            const status = t.remaining <= 0 ? "Finished" : (t.running ? "Running" : "Paused");
-            const pos = t.position ? `Order: ${t.position}` : "";
-            const toggleTxt = t.running ? "Pause" : "Start";
-            const handTxt = t.raised_hand ? "Lower Hand" : "Raise Hand";
-            const adOpc = locked ? "0.5" : "1";
-            const adjDisplay = adjustLocked ? "none" : "grid";
-
-            card.querySelector('.status-disp').textContent = status;
-            card.querySelector('.pos-disp').textContent = pos;
-            card.querySelector('.toggle-btn').textContent = toggleTxt;
-            card.querySelector('.hand-btn').textContent = handTxt;
-            
-            let adjContainer = card.querySelector('.adj-container');
-            if (adjContainer) adjContainer.style.display = adjDisplay;
-            
-            card.querySelectorAll('.adj-btn').forEach(btn => {
-                btn.style.opacity = adOpc;
-            });
-
-            const adjUp = document.getElementById(`adj-up-btn-${i}`);
-            if (adjUp) {
-                adjUp.onclick = (e) => adjust(e, i, adjustInterval);
-                adjUp.textContent = `+${adjustInterval}s`;
-            }
-            const adjDown = document.getElementById(`adj-down-btn-${i}`);
-            if (adjDown) {
-                adjDown.onclick = (e) => adjust(e, i, -adjustInterval);
-                adjDown.textContent = `-${adjustInterval}s`;
-            }
+    const castBtn = document.getElementById("modal-cast-btn");
+    if (castBtn) {
+        if (spell.level === 0) {
+            castBtn.textContent = "Cast Cantrip (Free)";
+        } else {
+            castBtn.textContent = `Expend Lvl ${spell.level} Slot & Cast`;
         }
     }
-    
-    // Ensure order in DOM matches ids array
-    let currentDOMIds = Array.from(container.children).map(child => Number(child.id.replace("timer-card-", "")));
-    let matching = true;
-    let visibleIds = ids.filter(id => expanded === null || expanded === id);
-    if (currentDOMIds.length === visibleIds.length) {
-        for(let k=0; k<visibleIds.length; k++) {
-            if(currentDOMIds[k] !== visibleIds[k]) {
-                matching = false; 
-                break;
-            }
-        }
-    } else {
-        matching = false;
-    }
-    
-    if (!matching) {
-        visibleIds.forEach(id => {
-            let c = document.getElementById(`timer-card-${id}`);
-            if(c) container.appendChild(c);
+
+    if (modal) modal.style.display = "flex";
+}
+
+function closeSpellDetailModal() {
+    const modal = document.getElementById("spell-detail-modal");
+    if (modal) modal.style.display = "none";
+    currentViewingSpell = null;
+}
+
+function castSpellFromModal() {
+    if (!currentViewingSpell) return;
+    const lvl = currentViewingSpell.level;
+
+    // Expend slot if level > 0 and player timer is selected
+    if (lvl > 0 && selectedTimerId) {
+        socket.emit("adjust_spell_slot", {
+            timer: selectedTimerId,
+            level: String(lvl),
+            delta: -1
         });
     }
+
+    // Reset action cooldown immediately
+    playerResetAction();
+    closeSpellDetailModal();
+    switchRemoteView("cooldown");
 }
 
-function toggle(e, i) {
-    // Prevent bubbling of click event resolving multiple tabs breaking
-    e.stopPropagation();
-    if (locked) return;
-    socket.emit("toggle", {timer: i});
-}
-
-function reset(e, i) {
-    e.stopPropagation();
-    if (locked) return;
-    socket.emit("reset", {timer: i, start: true});
-}
-
-function toggleHand(e, i) {
-    e.stopPropagation();
-    if (locked) return;
-    socket.emit("toggle_hand", {timer: i});
-}
-
-function adjust(e, i, delta) {
-    e.stopPropagation();
-    if (locked || adjustLocked) return;
-    socket.emit("adjust_timer", {timer: i, delta});
-}
+// Initial setup
+renderPlayerDropdown();

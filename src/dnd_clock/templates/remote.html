@@ -1,15 +1,256 @@
-    <html>
-    <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;700&display=swap" rel="stylesheet">
-        <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-        <link rel="stylesheet" href="/static/css/styles.css">
-    </head>
-    <body class="theme-table page-remote">
-        <h2>Remote Controller</h2>
-        
-        <div id="timers" style="display:flex; flex-direction:column; padding:15px; max-width:600px; margin:0 auto;"></div>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DnD Clock — Player Remote</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .remote-nav-bar {
+            display: flex;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: #181410;
+            border-top: 1px solid rgba(212, 175, 55, 0.3);
+            z-index: 1000;
+        }
+        .remote-nav-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            color: #aaa;
+            font-size: 11px;
+            font-family: 'Cinzel', serif;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 5px 0;
+            transition: all 0.2s ease;
+        }
+        .remote-nav-btn.active {
+            color: #d4af37;
+            background: rgba(212, 175, 55, 0.1);
+        }
+        .remote-nav-icon {
+            font-size: 20px;
+            margin-bottom: 2px;
+        }
+        .remote-view {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 15px 15px 75px;
+            box-sizing: border-box;
+            min-height: calc(100vh - 60px);
+        }
+        .player-select-dropdown {
+            background: #25201b;
+            color: #d4af37;
+            border: 1px solid #555;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: 'Cinzel', serif;
+            font-size: 16px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 12px;
+        }
+        .cooldown-hero-card {
+            background: linear-gradient(145deg, #2c2621, #1e1914);
+            border: 2px solid #d4af37;
+            border-radius: 16px;
+            padding: 20px 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.7);
+            text-align: center;
+            position: relative;
+        }
+        .cooldown-clock-large {
+            font-size: 72px;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            margin: 10px 0;
+            text-shadow: 0 0 15px rgba(0,0,0,0.8);
+        }
+        .big-action-btn {
+            width: 100%;
+            padding: 16px;
+            font-size: 20px;
+            font-family: 'Cinzel', serif;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+            box-sizing: border-box;
+        }
+        .slot-bubble {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 0 3px;
+            transition: all 0.2s ease;
+        }
+        .slot-bubble.filled {
+            background: #d4af37;
+            color: #111;
+            box-shadow: 0 0 8px rgba(212, 175, 55, 0.6);
+        }
+        .slot-bubble.spent {
+            background: #333;
+            border: 1px solid #666;
+            color: #666;
+        }
+    </style>
+</head>
+<body class="theme-table page-remote">
+    <!-- VIEW 1: COOLDOWN (Primary Action View) -->
+    <div id="view-cooldown" class="remote-view">
+        <select id="player-selector" class="player-select-dropdown" onchange="onPlayerSelected(this.value)"></select>
 
-        <script src="/static/js/remote.js"></script>
-    </body>
-    </html>
+        <div id="no-player-selected-msg" style="display:none; padding:40px 10px; text-align:center; color:#888;">
+            Please select your character above to begin.
+        </div>
+
+        <div id="cooldown-active-panel">
+            <div id="hero-cooldown-card" class="cooldown-hero-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div id="player-hero-name" style="font-family:'Cinzel', serif; font-size:22px; font-weight:bold; color:#d4af37;">Player</div>
+                    <div id="player-hero-status" style="font-size:14px; text-transform:uppercase; font-weight:bold; letter-spacing:1px;">PAUSED</div>
+                </div>
+
+                <div id="player-hero-char" style="font-size:14px; color:#aaa; margin-top:2px; text-align:left;"></div>
+
+                <div id="player-hero-time" class="cooldown-clock-large">1:00</div>
+
+                <!-- HP Summary bar on timer -->
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:15px;">
+                    <span id="hero-hp-text" style="font-size:13px; font-weight:bold; min-width:60px; text-align:left;">HP: 30/30</span>
+                    <div style="flex:1; background:rgba(0,0,0,0.5); border-radius:4px; height:8px; overflow:hidden; border:1px solid rgba(255,255,255,0.1);">
+                        <div id="hero-hp-bar" style="height:100%; width:100%; background:#2ecc71; transition:width 0.3s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Condition Alert if active -->
+                <div id="hero-condition-badge" style="display:none; background:#8b2525; color:white; padding:6px 12px; border-radius:6px; font-weight:bold; font-size:14px; margin-bottom:12px;"></div>
+
+                <!-- Main Action Button: Reset Cooldown -->
+                <button id="btn-reset-action" class="big-action-btn" style="background:#1e7f3f; color:white;" onclick="playerResetAction()">
+                    ⚡ Action Taken (Reset Cooldown)
+                </button>
+
+                <!-- Sub controls -->
+                <div style="display:flex; gap:10px; margin-top:12px;">
+                    <button id="btn-toggle-timer" style="flex:1; padding:12px; background:#444;" onclick="playerToggleTimer()">Start / Pause</button>
+                    <button id="btn-raise-hand" style="flex:1; padding:12px; background:rgba(218,165,32,0.2); color:gold; border:1px solid gold;" onclick="playerToggleHand()">✋ Raise Hand</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 2: SPELLBOOK -->
+    <div id="view-spellbook" class="remote-view" style="display:none;">
+        <h2 style="font-family:'Cinzel', serif; margin-top:0; color:#d4af37; text-align:center;">✨ Known Spells</h2>
+        
+        <input 
+            type="text" 
+            id="spell-search-input" 
+            placeholder="🔍 Search spell name or description..." 
+            oninput="filterSpellList(this.value)"
+            style="width:100%; text-align:left; padding:12px 14px; font-size:15px; border-radius:8px; margin-bottom:15px; box-sizing:border-box;"
+        >
+
+        <div id="spell-list-container" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+
+    <!-- VIEW 3: RESOURCES (Spell Slots & HP) -->
+    <div id="view-resources" class="remote-view" style="display:none;">
+        <h2 style="font-family:'Cinzel', serif; margin-top:0; color:#d4af37; text-align:center;">🛡️ Player Resources</h2>
+
+        <!-- Hit Points Card -->
+        <div style="background:#221e1a; border:1px solid #555; border-radius:12px; padding:15px; margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <h3 style="margin:0; font-family:'Cinzel', serif; font-size:18px;">Hit Points</h3>
+                <span id="resource-hp-label" style="font-size:18px; font-weight:bold; color:#2ecc71;">30 / 30 HP</span>
+            </div>
+            
+            <div style="background:rgba(0,0,0,0.5); border-radius:6px; height:12px; overflow:hidden; border:1px solid rgba(255,255,255,0.15); margin-bottom:15px;">
+                <div id="resource-hp-bar" style="height:100%; width:100%; background:#2ecc71; transition:width 0.3s ease;"></div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+                <button onclick="changePlayerHp(-5)" style="background:#8b2525; padding:10px; font-size:14px;">-5</button>
+                <button onclick="changePlayerHp(-1)" style="background:#6d2e2e; padding:10px; font-size:14px;">-1</button>
+                <button onclick="changePlayerHp(1)" style="background:#2e6d38; padding:10px; font-size:14px;">+1</button>
+                <button onclick="changePlayerHp(5)" style="background:#1e7f3f; padding:10px; font-size:14px;">+5</button>
+            </div>
+        </div>
+
+        <!-- Spell Slots Card -->
+        <div style="background:#221e1a; border:1px solid #555; border-radius:12px; padding:15px; margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 style="margin:0; font-family:'Cinzel', serif; font-size:18px;">Spell Slots</h3>
+                <button onclick="restoreAllPlayerSlots()" style="background:#2855a7; font-size:11px; padding:6px 10px; border-radius:5px;">Full Restore</button>
+            </div>
+
+            <div id="spell-slots-container" style="display:flex; flex-direction:column; gap:12px;"></div>
+        </div>
+    </div>
+
+    <!-- SPELL DETAIL MODAL -->
+    <div id="spell-detail-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;">
+        <div style="background:#241f1a; border:2px solid #d4af37; border-radius:12px; padding:20px; max-width:450px; width:100%; text-align:left; max-height:85vh; overflow-y:auto; box-sizing:border-box;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                <div>
+                    <h2 id="modal-spell-name" style="margin:0; font-family:'Cinzel', serif; color:#d4af37; font-size:24px;">Spell Name</h2>
+                    <div id="modal-spell-level" style="font-size:13px; color:#aaa; margin-top:2px;">Level 1 Evocation</div>
+                </div>
+                <button onclick="closeSpellDetailModal()" style="background:#555; padding:6px 12px; font-size:14px;">✕</button>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:rgba(0,0,0,0.3); padding:10px; border-radius:6px; margin-bottom:12px; font-size:13px;">
+                <div><strong>Duration:</strong> <span id="modal-spell-duration">1 round</span></div>
+                <div><strong>Concentration:</strong> <span id="modal-spell-concentration">No</span></div>
+            </div>
+
+            <div style="margin-bottom:18px;">
+                <h4 style="margin:0 0 6px 0; color:#d4af37;">Description & Effects:</h4>
+                <div id="modal-spell-desc" style="font-size:14px; line-height:1.6; color:#ddd; white-space:pre-line;"></div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; gap:10px;">
+                <button id="modal-cast-btn" style="flex:1; background:#1e7f3f;" onclick="castSpellFromModal()">Expend Slot & Cast</button>
+                <button style="flex:1; background:#444;" onclick="closeSpellDetailModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="remote-nav-bar">
+        <button id="nav-btn-cooldown" class="remote-nav-btn active" onclick="switchRemoteView('cooldown')">
+            <span class="remote-nav-icon">⏱️</span>
+            <span>Cooldown</span>
+        </button>
+        <button id="nav-btn-spellbook" class="remote-nav-btn" onclick="switchRemoteView('spellbook')">
+            <span class="remote-nav-icon">✨</span>
+            <span>Spellbook</span>
+        </button>
+        <button id="nav-btn-resources" class="remote-nav-btn" onclick="switchRemoteView('resources')">
+            <span class="remote-nav-icon">🛡️</span>
+            <span>Resources</span>
+        </button>
+    </nav>
+
+    <script src="/static/js/remote.js"></script>
+</body>
+</html>

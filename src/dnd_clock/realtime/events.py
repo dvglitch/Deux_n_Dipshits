@@ -116,6 +116,23 @@ def register_socket_events(socketio):
             return
         CombatService.set_hp(data["timer"], data["current_hp"], data.get("max_hp"))
 
+    @socketio.on("set_spell_slot")
+    def handle_set_spell_slot(data):
+        if not isinstance(data, dict) or "timer" not in data or "level" not in data or "current" not in data:
+            return
+        CombatService.set_spell_slot(data["timer"], data["level"], data["current"], data.get("max_slots"))
+
+    @socketio.on("adjust_spell_slot")
+    def handle_adjust_spell_slot(data):
+        if not isinstance(data, dict) or "timer" not in data or "level" not in data or "delta" not in data:
+            return
+        CombatService.adjust_spell_slot(data["timer"], data["level"], data["delta"])
+
+    @socketio.on("restore_all_slots")
+    def handle_restore_all_slots(data=None):
+        timer_id = data.get("timer") if isinstance(data, dict) else None
+        CombatService.restore_all_slots(timer_id)
+
     @socketio.on("set_timer_meta")
     def handle_set_timer_meta(data):
         if not isinstance(data, dict) or "timer" not in data:

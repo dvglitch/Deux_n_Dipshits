@@ -48,6 +48,7 @@ def init_timers():
     timer_portraits = settings.get("timer_portraits", {})
     timer_enemies = settings.get("timer_is_enemy", {})
     timer_chars = settings.get("timer_character_names", {})
+    timer_slots = settings.get("timer_spell_slots", {})
 
     timers = {
         i: {
@@ -67,6 +68,11 @@ def init_timers():
             "accent_color": timer_colors.get(str(i), "#d4af37"),
             "portrait_url": timer_portraits.get(str(i), ""),
             "is_enemy": bool(timer_enemies.get(str(i), not timer_vis.get(str(i), True))),
+            "spell_slots": timer_slots.get(str(i), {
+                "1": {"current": 4, "max": 4},
+                "2": {"current": 3, "max": 3},
+                "3": {"current": 2, "max": 2}
+            }),
         }
         for i in active_timer_ids
     }
@@ -96,6 +102,7 @@ def save_current_state():
         "timer_accent_colors": {str(k): v.get("accent_color", "#d4af37") for k, v in timers.items()},
         "timer_portraits": {str(k): v.get("portrait_url", "") for k, v in timers.items()},
         "timer_is_enemy": {str(k): v.get("is_enemy", False) for k, v in timers.items()},
+        "timer_spell_slots": {str(k): v.get("spell_slots", {}) for k, v in timers.items()},
         "theme": theme,
         "custom_bg_url": custom_bg_url,
         "timer_done_sound": control_state.get("timer_done_sound", "synthetic"),
@@ -186,6 +193,44 @@ def set_hp(timer_id, current_hp, max_hp=None):
     if "max_hp" in t:
         curr = min(t["max_hp"], curr)
     t["current_hp"] = curr
+    save_current_state()
+
+def set_spell_slot(timer_id, level, current, max_slots=None):
+    if timer_id not in timers: return
+    t = timers[timer_id]
+    if "spell_slots" not in t:
+        t["spell_slots"] = {}
+    lvl_str = str(level)
+    if lvl_str not in t["spell_slots"]:
+        t["spell_slots"][lvl_str] = {"current": int(current), "max": int(max_slots or current or 4)}
+    else:
+        if max_slots is not None:
+            t["spell_slots"][lvl_str]["max"] = max(1, int(max_slots))
+        cur_max = t["spell_slots"][lvl_str].get("max", 4)
+        t["spell_slots"][lvl_str]["current"] = max(0, min(cur_max, int(current)))
+    save_current_state()
+
+def adjust_spell_slot(timer_id, level, delta):
+    if timer_id not in timers: return
+    t = timers[timer_id]
+    if "spell_slots" not in t:
+        t["spell_slots"] = {}
+    lvl_str = str(level)
+    slot_info = t["spell_slots"].get(lvl_str, {"current": 4, "max": 4})
+    cur_val = slot_info.get("current", 4)
+    max_val = slot_info.get("max", 4)
+    new_val = max(0, min(max_val, cur_val + int(delta)))
+    slot_info["current"] = new_val
+    t["spell_slots"][lvl_str] = slot_info
+    save_current_state()
+
+def restore_all_slots(timer_id=None):
+    target_ids = [timer_id] if timer_id in timers else list(timers.keys())
+    for tid in target_ids:
+        t = timers[tid]
+        if "spell_slots" in t:
+            for lvl_str in t["spell_slots"]:
+                t["spell_slots"][lvl_str]["current"] = t["spell_slots"][lvl_str].get("max", 4)
     save_current_state()
 
 def set_timer_meta(timer_id, accent_color=None, portrait_url=None, is_enemy=None, character_name=None):

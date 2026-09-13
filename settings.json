@@ -6,7 +6,9 @@
         3,
         4,
         5,
-        6
+        6,
+        7,
+        8
     ],
     "locked": false,
     "adjust_locked": true,
@@ -20,7 +22,9 @@
         "3": 100,
         "4": 120,
         "5": 2,
-        "6": 2
+        "6": 2,
+        "7": 2,
+        "8": 2
     },
     "timer_cooldown_durations": {
         "1": 60,
@@ -28,7 +32,9 @@
         "3": 100,
         "4": 120,
         "5": 2,
-        "6": 2
+        "6": 2,
+        "7": 2,
+        "8": 2
     },
     "timer_names": {
         "1": "Angel",
@@ -36,7 +42,9 @@
         "3": "Timer 3",
         "4": "Timer 4",
         "5": "Goblin Raider",
-        "6": "Goblin Raider"
+        "6": "Goblin Raider",
+        "7": "Goblin Raider",
+        "8": "Goblin Raider"
     },
     "timer_character_names": {
         "1": "Thorin",
@@ -44,7 +52,9 @@
         "3": "",
         "4": "",
         "5": "",
-        "6": ""
+        "6": "",
+        "7": "",
+        "8": ""
     },
     "timer_show_on_remote": {
         "1": true,
@@ -52,7 +62,9 @@
         "3": true,
         "4": false,
         "5": false,
-        "6": false
+        "6": false,
+        "7": false,
+        "8": false
     },
     "timer_hp": {
         "1": 18,
@@ -60,7 +72,9 @@
         "3": 30,
         "4": 30,
         "5": 30,
-        "6": 30
+        "6": 30,
+        "7": 30,
+        "8": 30
     },
     "timer_max_hp": {
         "1": 35,
@@ -68,7 +82,9 @@
         "3": 30,
         "4": 30,
         "5": 30,
-        "6": 30
+        "6": 30,
+        "7": 30,
+        "8": 30
     },
     "timer_accent_colors": {
         "1": "#3498db",
@@ -76,7 +92,9 @@
         "3": "#d4af37",
         "4": "#d4af37",
         "5": "#e74c3c",
-        "6": "#e74c3c"
+        "6": "#e74c3c",
+        "7": "#e74c3c",
+        "8": "#e74c3c"
     },
     "timer_portraits": {
         "1": "",
@@ -84,7 +102,9 @@
         "3": "",
         "4": "",
         "5": "",
-        "6": ""
+        "6": "",
+        "7": "",
+        "8": ""
     },
     "timer_is_enemy": {
         "1": false,
@@ -92,7 +112,97 @@
         "3": false,
         "4": true,
         "5": true,
-        "6": true
+        "6": true,
+        "7": true,
+        "8": true
+    },
+    "timer_spell_slots": {
+        "1": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        },
+        "2": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        },
+        "3": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        },
+        "4": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        },
+        "5": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        },
+        "6": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        },
+        "7": {},
+        "8": {}
     },
     "theme": "forest",
     "custom_bg_url": "",

@@ -105,6 +105,31 @@ class CombatService:
         return True
 
     @staticmethod
+    def set_spell_slot(timer_id_raw: Any, level_raw: Any, current_raw: Any, max_slots_raw: Any = None) -> bool:
+        timer_id = _parse_int(timer_id_raw)
+        current = _parse_int(current_raw)
+        max_slots = _parse_int(max_slots_raw) if max_slots_raw is not None else None
+        if timer_id is None or current is None or level_raw is None:
+            return False
+        tm.set_spell_slot(timer_id, str(level_raw), current, max_slots=max_slots)
+        return True
+
+    @staticmethod
+    def adjust_spell_slot(timer_id_raw: Any, level_raw: Any, delta_raw: Any) -> bool:
+        timer_id = _parse_int(timer_id_raw)
+        delta = _parse_int(delta_raw)
+        if timer_id is None or delta is None or level_raw is None:
+            return False
+        tm.adjust_spell_slot(timer_id, str(level_raw), delta)
+        return True
+
+    @staticmethod
+    def restore_all_slots(timer_id_raw: Any = None) -> bool:
+        timer_id = _parse_int(timer_id_raw) if timer_id_raw is not None else None
+        tm.restore_all_slots(timer_id=timer_id)
+        return True
+
+    @staticmethod
     def set_timer_meta(
         timer_id_raw: Any,
         accent_color: Optional[str] = None,

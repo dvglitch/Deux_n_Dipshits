@@ -109,6 +109,22 @@ class RealtimeSocketTests(unittest.TestCase):
         self.assertTrue(tm.timers[newest_id]["is_enemy"])
         self.assertFalse(tm.timers[newest_id]["show_on_remote"])
 
+    def test_spell_slot_adjustment_and_restoration(self):
+        self.client.emit("set_spell_slot", {"timer": 1, "level": "1", "current": 4, "max_slots": 4})
+        self.assertEqual(tm.timers[1]["spell_slots"]["1"]["current"], 4)
+
+        # Spend 1 slot
+        self.client.emit("adjust_spell_slot", {"timer": 1, "level": "1", "delta": -1})
+        self.assertEqual(tm.timers[1]["spell_slots"]["1"]["current"], 3)
+
+        # Spend another slot
+        self.client.emit("adjust_spell_slot", {"timer": 1, "level": "1", "delta": -1})
+        self.assertEqual(tm.timers[1]["spell_slots"]["1"]["current"], 2)
+
+        # Restore all slots
+        self.client.emit("restore_all_slots", {"timer": 1})
+        self.assertEqual(tm.timers[1]["spell_slots"]["1"]["current"], 4)
+
 
 if __name__ == "__main__":
     unittest.main()
