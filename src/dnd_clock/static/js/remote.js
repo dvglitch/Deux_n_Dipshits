@@ -389,23 +389,45 @@ function filterSpellList(query) {
     if (!container) return;
 
     const q = (query || "").trim().toLowerCase();
+    
+    // Determine active player's name and character name
+    let selectedPlayerName = "";
+    let selectedCharName = "";
+    if (selectedTimerId && timers[selectedTimerId]) {
+        selectedPlayerName = (timers[selectedTimerId].name || "").trim().toLowerCase();
+        selectedCharName = (timers[selectedTimerId].character_name || "").trim().toLowerCase();
+    }
+
     const filtered = allSpells.filter(s => {
+        // 1. Visibility check: if spell is assigned to a specific player, only show to them or if no player is selected
+        const assignedTo = (s.assigned_to || "").trim().toLowerCase();
+        if (assignedTo && assignedTo !== "all" && (selectedPlayerName || selectedCharName)) {
+            const matchesPlayer = (selectedPlayerName && assignedTo === selectedPlayerName);
+            const matchesChar = (selectedCharName && assignedTo === selectedCharName);
+            if (!matchesPlayer && !matchesChar) {
+                return false;
+            }
+        }
+
+        // 2. Search query check
         if (!q) return true;
         return (s.name || "").toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q);
     });
 
     if (filtered.length === 0) {
-        container.innerHTML = `<div style="text-align:center; color:#888; padding:30px;">No spells found matching "${query}".</div>`;
+        container.innerHTML = `<div style="text-align:center; color:#888; padding:30px;">No spells found matching current filters.</div>`;
         return;
     }
 
-    container.innerHTML = filtered.map((s, idx) => {
+    container.innerHTML = filtered.map((s) => {
+        const idx = allSpells.indexOf(s);
         const levelLabel = s.level === 0 ? "Cantrip" : `Lvl ${s.level}`;
         const concTag = s.concentration ? `<span style="font-size:10px; background:#f39c12; color:black; padding:2px 5px; border-radius:3px; margin-left:6px; font-weight:bold;">CONC</span>` : "";
+        const assignedTag = s.assigned_to ? `<span style="font-size:10px; background:rgba(212,175,55,0.2); color:#d4af37; border:1px solid #d4af37; padding:2px 5px; border-radius:3px; margin-left:6px;">${s.assigned_to}</span>` : "";
         return `
             <div class="timer-card" style="margin:0; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;" onclick="openSpellDetailModal(${idx})">
                 <div>
-                    <div style="font-weight:bold; font-size:16px; color:#f5f5f5;">${s.name} ${concTag}</div>
+                    <div style="font-weight:bold; font-size:16px; color:#f5f5f5;">${s.name} ${concTag} ${assignedTag}</div>
                     <div style="font-size:12px; color:#aaa; margin-top:2px;">${levelLabel} • ${s.duration || '1 action'}</div>
                 </div>
                 <div style="font-size:18px; color:#d4af37;">❯</div>
@@ -425,6 +447,17 @@ function openSpellDetailModal(spellIndex) {
     document.getElementById("modal-spell-duration").textContent = spell.duration || "Instantaneous";
     document.getElementById("modal-spell-concentration").textContent = spell.concentration ? "Yes (Requires Concentration)" : "No";
     document.getElementById("modal-spell-desc").textContent = spell.description || "No description provided.";
+
+    const assignedContainer = document.getElementById("modal-spell-assigned-container");
+    const assignedSpan = document.getElementById("modal-spell-assigned");
+    if (assignedContainer && assignedSpan) {
+        if (spell.assigned_to) {
+            assignedContainer.style.display = "block";
+            assignedSpan.textContent = spell.assigned_to;
+        } else {
+            assignedContainer.style.display = "none";
+        }
+    }
 
     const castBtn = document.getElementById("modal-cast-btn");
     if (castBtn) {
