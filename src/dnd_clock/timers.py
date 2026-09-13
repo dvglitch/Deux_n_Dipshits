@@ -35,6 +35,35 @@ control_state = {
     "cooldown_mode": True
 }
 
+def save_current_state():
+    """Saves the current variables down to the persistence layer"""
+    settings = {
+        "max_timer_id": max_timer_id,
+        "active_timer_ids": active_timer_ids,
+        "locked": control_state["locked"],
+        "adjust_locked": control_state.get("adjust_locked", False),
+        "adjust_interval": control_state.get("adjust_interval", 30),
+        "DEFAULT_DURATION": DEFAULT_DURATION,
+        "cooldown_mode": True,
+        "display_tab": control_state.get("display_tab", "timers"),
+        "timer_durations": {str(k): v["duration"] for k, v in timers.items()},
+        "timer_cooldown_durations": {str(k): v.get("cooldown_duration", v["duration"]) for k, v in timers.items()},
+        "timer_names": {str(k): v["name"] for k, v in timers.items()},
+        "timer_character_names": {str(k): v.get("character_name", "") for k, v in timers.items()},
+        "timer_show_on_remote": {str(k): v.get("show_on_remote", True) for k, v in timers.items()},
+        "timer_hp": {str(k): v.get("current_hp", 30) for k, v in timers.items()},
+        "timer_max_hp": {str(k): v.get("max_hp", 30) for k, v in timers.items()},
+        "timer_accent_colors": {str(k): v.get("accent_color", "#d4af37") for k, v in timers.items()},
+        "timer_portraits": {str(k): v.get("portrait_url", "") for k, v in timers.items()},
+        "timer_is_enemy": {str(k): v.get("is_enemy", False) for k, v in timers.items()},
+        "timer_spell_slots": {str(k): v.get("spell_slots", {}) for k, v in timers.items()},
+        "theme": theme,
+        "custom_bg_url": custom_bg_url,
+        "timer_done_sound": control_state.get("timer_done_sound", "synthetic"),
+        "hand_raise_sound": control_state.get("hand_raise_sound", "synthetic")
+    }
+    save_settings(settings)
+
 def sync_with_campaign_profiles(profiles=None, clear_enemies=False):
     """Sync active timers with saved campaign player profiles (from DB or provided list)."""
     global timers, active_timer_ids, max_timer_id, finish_order
@@ -154,35 +183,6 @@ def init_timers():
 
 # Initialize timers on startup
 init_timers()
-
-def save_current_state():
-    """Saves the current variables down to the persistence layer"""
-    settings = {
-        "max_timer_id": max_timer_id,
-        "active_timer_ids": active_timer_ids,
-        "locked": control_state["locked"],
-        "adjust_locked": control_state.get("adjust_locked", False),
-        "adjust_interval": control_state.get("adjust_interval", 30),
-        "DEFAULT_DURATION": DEFAULT_DURATION,
-        "cooldown_mode": True,
-        "display_tab": control_state.get("display_tab", "timers"),
-        "timer_durations": {str(k): v["duration"] for k, v in timers.items()},
-        "timer_cooldown_durations": {str(k): v.get("cooldown_duration", v["duration"]) for k, v in timers.items()},
-        "timer_names": {str(k): v["name"] for k, v in timers.items()},
-        "timer_character_names": {str(k): v.get("character_name", "") for k, v in timers.items()},
-        "timer_show_on_remote": {str(k): v.get("show_on_remote", True) for k, v in timers.items()},
-        "timer_hp": {str(k): v.get("current_hp", 30) for k, v in timers.items()},
-        "timer_max_hp": {str(k): v.get("max_hp", 30) for k, v in timers.items()},
-        "timer_accent_colors": {str(k): v.get("accent_color", "#d4af37") for k, v in timers.items()},
-        "timer_portraits": {str(k): v.get("portrait_url", "") for k, v in timers.items()},
-        "timer_is_enemy": {str(k): v.get("is_enemy", False) for k, v in timers.items()},
-        "timer_spell_slots": {str(k): v.get("spell_slots", {}) for k, v in timers.items()},
-        "theme": theme,
-        "custom_bg_url": custom_bg_url,
-        "timer_done_sound": control_state.get("timer_done_sound", "synthetic"),
-        "hand_raise_sound": control_state.get("hand_raise_sound", "synthetic")
-    }
-    save_settings(settings)
 
 # ==========================================
 # ====== STATE MUTATION APIS ===============
