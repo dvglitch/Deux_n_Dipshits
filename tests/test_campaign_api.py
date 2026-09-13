@@ -64,6 +64,57 @@ class CampaignApiTests(unittest.TestCase):
         get_res = self.client.get("/api/campaign/objectives")
         self.assertEqual(get_res.get_json()["records"], [])
 
+    def test_world_maps_with_pins_persistence(self):
+        payload = {
+            "records": [
+                {
+                    "id": "map_1",
+                    "name": "Sword Coast",
+                    "image_url": "https://example.com/map.jpg",
+                    "pins": "Party: 45%, 60% | Dungeon: 70%, 30%",
+                    "notes": "Main region map"
+                }
+            ]
+        }
+        res = self.client.post("/api/campaign/world_maps", json=payload)
+        self.assertEqual(res.status_code, 200)
+
+        get_res = self.client.get("/api/campaign/world_maps")
+        self.assertEqual(get_res.status_code, 200)
+        records = get_res.get_json()["records"]
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["pins"], "Party: 45%, 60% | Dungeon: 70%, 30%")
+
+    def test_recaps_and_objectives_persistence(self):
+        # Objectives
+        obj_payload = {
+            "records": [
+                {"id": "obj_1", "title": "Defeat the Dragon", "status": "Active", "priority": "High"},
+                {"id": "obj_2", "title": "Find the Inn", "status": "Completed", "priority": "Low"},
+            ]
+        }
+        res_obj = self.client.post("/api/campaign/objectives", json=obj_payload)
+        self.assertEqual(res_obj.status_code, 200)
+
+        # Recaps
+        recap_payload = {
+            "records": [
+                {
+                    "id": "recap_1",
+                    "session_number": 1,
+                    "date": "2026-09-01",
+                    "title": "The Journey Begins",
+                    "summary": "Party met at the tavern."
+                }
+            ]
+        }
+        res_rec = self.client.post("/api/campaign/recaps", json=recap_payload)
+        self.assertEqual(res_rec.status_code, 200)
+
+        get_rec = self.client.get("/api/campaign/recaps")
+        self.assertEqual(len(get_rec.get_json()["records"]), 1)
+        self.assertEqual(get_rec.get_json()["records"][0]["title"], "The Journey Begins")
+
 
 if __name__ == "__main__":
     unittest.main()

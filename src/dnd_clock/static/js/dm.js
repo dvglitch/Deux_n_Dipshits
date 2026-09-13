@@ -201,6 +201,18 @@ socket.on("control_update", (data) => {
         AudioController.setTimerSound(data.timer_done_sound);
     }
 
+    if (data.display_tab) {
+        const tabSelect = document.getElementById("dmDisplayTabSelect");
+        if (tabSelect && document.activeElement !== tabSelect) {
+            tabSelect.value = data.display_tab;
+        }
+    }
+
+    const lockToggle = document.getElementById("dmLockToggle");
+    if (lockToggle) {
+        lockToggle.checked = Boolean(data.locked);
+    }
+
     document.body.style.opacity = locked ? 0.5 : 1;
     renderTimers();
 });

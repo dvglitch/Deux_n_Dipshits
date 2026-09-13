@@ -817,7 +817,8 @@ function addMapRow(data = {}) {
     tr.innerHTML = `
         <td><input type="text" class="m-title" value="${data.name || ''}" placeholder="Map Name" style="width:100%;"></td>
         <td><input type="text" class="m-url" value="${data.image_url || ''}" placeholder="Image URL / Path" style="width:100%;"></td>
-        <td><input type="text" class="m-notes" value="${data.notes || ''}" placeholder="Notes / markers" style="width:100%;"></td>
+        <td><input type="text" class="m-pins" value="${data.pins || ''}" placeholder="Party: (45%, 60%), Dungeon: (70%, 30%)" style="width:100%;"></td>
+        <td><input type="text" class="m-notes" value="${data.notes || ''}" placeholder="Notes" style="width:100%;"></td>
         <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
     `;
     tbody.appendChild(tr);
@@ -829,8 +830,9 @@ async function saveMapsCollection() {
         id: `map_${idx + 1}`,
         name: r.querySelector('.m-title')?.value || '',
         image_url: r.querySelector('.m-url')?.value || '',
+        pins: r.querySelector('.m-pins')?.value || '',
         notes: r.querySelector('.m-notes')?.value || ''
-    })).filter(r => r.name);
+    })).filter(r => r.name || r.image_url);
 
     try {
         const res = await fetch('/api/campaign/world_maps', {

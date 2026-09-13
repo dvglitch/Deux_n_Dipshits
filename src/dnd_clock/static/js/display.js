@@ -153,15 +153,54 @@ async function loadDisplayMap() {
         const imgEl = document.getElementById("display-map-img");
         const emptyEl = document.getElementById("display-map-empty");
         const notesEl = document.getElementById("display-map-notes");
+        const pinsContainer = document.getElementById("display-map-pins");
+
         if (maps.length > 0 && maps[0].image_url) {
             imgEl.src = maps[0].image_url;
             imgEl.style.display = "block";
             emptyEl.style.display = "none";
             notesEl.textContent = maps[0].notes || "";
+
+            // Parse and render pins (e.g. "Party: 45%, 60% | Dungeon: 70%, 30%")
+            if (pinsContainer) {
+                pinsContainer.innerHTML = "";
+                const pinsRaw = maps[0].pins || "";
+                if (pinsRaw.trim()) {
+                    const pinItems = pinsRaw.split("|");
+                    pinItems.forEach(item => {
+                        const parts = item.split(":");
+                        if (parts.length >= 2) {
+                            const label = parts[0].trim();
+                            const coords = parts[1].match(/(\d+)%?\s*,\s*(\d+)%?/);
+                            if (coords) {
+                                const left = coords[1];
+                                const top = coords[2];
+                                const pin = document.createElement("div");
+                                pin.style.cssText = `
+                                    position: absolute;
+                                    left: ${left}%;
+                                    top: ${top}%;
+                                    transform: translate(-50%, -100%);
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    pointer-events: auto;
+                                `;
+                                pin.innerHTML = `
+                                    <span style="background:rgba(20,16,12,0.9); border:1px solid #d4af37; color:#d4af37; padding:2px 6px; border-radius:4px; font-size:12px; font-weight:bold; font-family:'Cinzel', serif; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,0.8);">${label}</span>
+                                    <span style="font-size:20px; text-shadow:0 0 5px black;">📍</span>
+                                `;
+                                pinsContainer.appendChild(pin);
+                            }
+                        }
+                    });
+                }
+            }
         } else {
             imgEl.style.display = "none";
             emptyEl.style.display = "block";
             notesEl.textContent = "";
+            if (pinsContainer) pinsContainer.innerHTML = "";
         }
     } catch (e) {
         console.error("Failed to load map:", e);

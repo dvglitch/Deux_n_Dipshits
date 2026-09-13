@@ -53,6 +53,13 @@ class RosterManagerTests(unittest.TestCase):
         url = service.save_portrait("player_1", "test.png", b"\x89PNG\r\n\x1a\nfakeimagecontent")
         self.assertTrue(url.startswith("/static/images/portraits/portrait_player_1_"))
         self.assertTrue(url.endswith(".png"))
+        # Clean up created test file
+        from dnd_clock.services.portrait_service import LOCAL_UPLOADS_DIR
+        for p in LOCAL_UPLOADS_DIR.glob("portrait_player_1_*"):
+            try:
+                p.unlink()
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":
