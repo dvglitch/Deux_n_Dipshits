@@ -147,6 +147,8 @@ function adjustHp(e, i, delta) {
     const cur = t.current_hp !== undefined ? t.current_hp : 30;
     const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
     const newHp = Math.max(0, Math.min(maxHp, cur + delta));
+    t.current_hp = newHp;
+    renderTimers();
     socket.emit("set_hp", {timer: i, current_hp: newHp, max_hp: maxHp});
 }
 
@@ -316,7 +318,7 @@ function renderTimers() {
                 
                 <!-- Quick HP Bar inline -->
                 <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                    <div style="font-size:12px; font-weight:bold; min-width:48px; text-align:left;">HP: ${curHp}/${maxHp}</div>
+                    <div class="hp-inline-text" style="font-size:12px; font-weight:bold; min-width:48px; text-align:left;">HP: ${curHp}/${maxHp}</div>
                     <div style="flex:1; background:rgba(0,0,0,0.5); border-radius:4px; height:6px; overflow:hidden;">
                         <div class="hp-fill-bar" style="height:100%; width:${Math.min(100, (curHp/maxHp)*100)}%; background:${(curHp/maxHp) <= 0.25 ? '#e74c3c' : ((curHp/maxHp) <= 0.5 ? '#f39c12' : '#2ecc71')};"></div>
                     </div>
@@ -335,7 +337,7 @@ function renderTimers() {
                         <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:8px 10px; margin-bottom:12px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                                 <span style="font-size:13px; font-weight:bold;">Hit Points</span>
-                                <span style="font-size:13px; color:#2ecc71; font-weight:bold;">${curHp} / ${maxHp} HP</span>
+                                <span class="hp-exp-text" style="font-size:13px; color:#2ecc71; font-weight:bold;">${curHp} / ${maxHp} HP</span>
                             </div>
                             <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;">
                                 <button onclick="adjustHp(event, ${i}, -5)" style="padding:6px; font-size:12px; background:#a83232;">-5</button>
@@ -377,7 +379,25 @@ function renderTimers() {
         card.querySelector('.name-disp').textContent = t.name;
         card.querySelector('.time-disp').textContent = timeStr;
 
+        const hpPct = Math.max(0, Math.min(100, (curHp / Math.max(1, maxHp)) * 100));
+        const hpColor = (curHp / Math.max(1, maxHp)) <= 0.25 ? '#e74c3c' : ((curHp / Math.max(1, maxHp)) <= 0.5 ? '#f39c12' : '#2ecc71');
+
+        const hpInline = card.querySelector('.hp-inline-text');
+        if (hpInline) hpInline.textContent = `HP: ${curHp}/${maxHp}`;
+
+        const hpBar = card.querySelector('.hp-fill-bar');
+        if (hpBar) {
+            hpBar.style.width = `${hpPct}%`;
+            hpBar.style.background = hpColor;
+        }
+
         if (isExp) {
+            const hpExp = card.querySelector('.hp-exp-text');
+            if (hpExp) {
+                hpExp.textContent = `${curHp} / ${maxHp} HP`;
+                hpExp.style.color = hpColor;
+            }
+
             const status = t.remaining <= 0 ? "Ready" : (t.running ? "Running" : "Paused");
             const pos = t.position ? `Order: #${t.position}` : "";
             const toggleTxt = t.running ? "Pause" : "Start";

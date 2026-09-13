@@ -20,6 +20,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 STATIC_ROOT = PACKAGE_ROOT / "static"
 SOUNDS_ROOT = STATIC_ROOT / "sounds"
 IMAGES_ROOT = STATIC_ROOT / "images"
+MAPS_ROOT = STATIC_ROOT / "maps"
 
 
 def create_app(start_background_task=True):
@@ -37,6 +38,10 @@ def create_app(start_background_task=True):
     @flask_app.route("/static/images/<path:filename>")
     def serve_external_images(filename):
         return send_from_directory(IMAGES_ROOT, filename)
+
+    @flask_app.route("/static/maps/<path:filename>")
+    def serve_external_maps(filename):
+        return send_from_directory(MAPS_ROOT, filename)
 
     flask_app.register_blueprint(control_bp)
     flask_app.register_blueprint(display_bp)
@@ -59,6 +64,16 @@ def create_app(start_background_task=True):
             path.name
             for path in SOUNDS_ROOT.iterdir()
             if path.suffix.lower() in {".mp3", ".wav", ".ogg"}
+        ]
+        return jsonify(sorted(files))
+
+    @flask_app.route("/api/maps")
+    def list_maps():
+        MAPS_ROOT.mkdir(parents=True, exist_ok=True)
+        files = [
+            path.name
+            for path in MAPS_ROOT.iterdir()
+            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
         ]
         return jsonify(sorted(files))
 

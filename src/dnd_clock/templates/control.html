@@ -219,7 +219,10 @@
                     <!-- Panel: World Maps -->
                     <div id="maint-panel-maps" class="maint-panel" style="display:none;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                            <h3 style="margin:0;">World Maps</h3>
+                            <div>
+                                <h3 style="margin:0;">World Maps</h3>
+                                <div style="font-size:12px; color:#aaa; margin-top:2px;">Upload maps directly or place images in <code>static/maps/</code>. Drag markers on any map to position them.</div>
+                            </div>
                             <div>
                                 <button class="maint-btn-primary" onclick="addMapRow()">+ Add Map</button>
                                 <button class="maint-btn-primary" style="background:#2855a7; margin-left:10px;" onclick="saveMapsCollection()">💾 Save Maps</button>
@@ -229,8 +232,8 @@
                             <thead>
                                 <tr>
                                     <th>Map Title</th>
-                                    <th>Image URL</th>
-                                    <th>Pins / Markers (e.g. Party, Dungeon)</th>
+                                    <th>Image URL / Upload</th>
+                                    <th>Markers / Pins</th>
                                     <th>Notes</th>
                                     <th>Action</th>
                                 </tr>
@@ -287,9 +290,57 @@
                 </div>
             </div>
 
+            <!-- MAP MARKER EDITOR MODAL -->
+            <div id="map-marker-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99999; justify-content:center; align-items:center; padding:20px; box-sizing:border-box;">
+                <div style="background:#1a1714; border:2px solid #d4af37; border-radius:12px; max-width:1200px; width:100%; max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,0.9);">
+                    <!-- Modal Header -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 20px; border-bottom:1px solid #444; background:#241f1a;">
+                        <div>
+                            <h3 id="modal-map-title" style="margin:0; font-family:'Cinzel', serif; color:#d4af37; font-size:20px;">📍 Interactive Map Marker Editor</h3>
+                            <div style="font-size:12px; color:#aaa; margin-top:2px;">Drag markers to reposition them. Click anywhere on the map or use presets below to place new pins.</div>
+                        </div>
+                        <button onclick="closeMapMarkerModal()" style="background:#555; padding:6px 14px; font-size:14px; border:none; border-radius:4px; color:white; cursor:pointer;">✕ Close</button>
+                    </div>
+
+                    <!-- Presets / Actions Toolbar -->
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 20px; background:#1e1a16; border-bottom:1px solid #333;">
+                        <span style="font-size:13px; font-weight:bold; color:#d4af37;">Quick Add:</span>
+                        <button class="maint-btn-primary" style="padding:4px 10px; font-size:12px;" onclick="addPresetMarker('🛡️ Party')">+ 🛡️ Party</button>
+                        <button class="maint-btn-primary" style="padding:4px 10px; font-size:12px;" onclick="addPresetMarker('⚔️ Boss')">+ ⚔️ Boss</button>
+                        <button class="maint-btn-primary" style="padding:4px 10px; font-size:12px;" onclick="addPresetMarker('🏰 Town')">+ 🏰 Town</button>
+                        <button class="maint-btn-primary" style="padding:4px 10px; font-size:12px;" onclick="addPresetMarker('💀 Dungeon')">+ 💀 Dungeon</button>
+                        <button class="maint-btn-primary" style="padding:4px 10px; font-size:12px;" onclick="addPresetMarker('⛺ Camp')">+ ⛺ Camp</button>
+                        <button class="maint-btn-primary" style="padding:4px 10px; font-size:12px;" onclick="addPresetMarker('📍 Quest')">+ 📍 Quest</button>
+                        <div style="margin-left:auto; display:flex; gap:10px;">
+                            <button class="maint-btn-danger" style="padding:4px 10px; font-size:12px;" onclick="clearAllMarkers()">Clear All</button>
+                            <button class="maint-btn-primary" style="background:#2855a7; padding:4px 14px; font-size:13px; font-weight:bold;" onclick="saveMapMarkersFromModal()">💾 Apply Markers</button>
+                        </div>
+                    </div>
+
+                    <!-- Workspace Container (Map + Marker Sidebar) -->
+                    <div style="display:flex; flex:1; min-height:0; overflow:hidden;">
+                        <!-- Map Canvas Viewport -->
+                        <div id="modal-map-viewport" style="flex:1; background:#0d0d0d; display:flex; justify-content:center; align-items:center; overflow:auto; position:relative; padding:15px; user-select:none;">
+                            <div id="modal-map-stage" style="position:relative; display:inline-block; max-width:100%; cursor:crosshair;" onclick="handleMapStageClick(event)">
+                                <img id="modal-map-img" src="" alt="World Map" style="max-width:100%; max-height:65vh; display:block; border-radius:6px; box-shadow:0 4px 20px rgba(0,0,0,0.8); pointer-events:none;">
+                                <div id="modal-map-pins-layer" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Marker List Sidebar -->
+                        <div style="width:280px; background:#1e1a16; border-left:1px solid #333; display:flex; flex-direction:column; padding:12px; box-sizing:border-box;">
+                            <h4 style="margin:0 0 10px 0; color:#d4af37; font-size:14px; font-family:'Cinzel', serif;">Active Markers (<span id="modal-marker-count">0</span>)</h4>
+                            <div id="modal-marker-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <style>
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                 .nav-btn:hover { background: rgba(0,0,0,0.8); }
+                .draggable-pin { cursor: grab; user-select: none; }
+                .draggable-pin:active { cursor: grabbing; }
             </style>
             <script src="/static/js/control.js"></script>
         </body>

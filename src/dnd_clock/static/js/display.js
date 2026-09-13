@@ -145,57 +145,69 @@ function switchDisplayTab(tab) {
     else if (tab === "recaps") loadDisplayRecaps();
 }
 
+let currentDisplayMaps = [];
+let currentDisplayPins = [];
+
+function parseDisplayPins(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'object') return [raw];
+    if (typeof raw !== 'string') return [];
+    
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+    } catch(e) {}
+
+    const pins = [];
+    const items = raw.split(/\||\n/);
+    items.forEach((item, idx) => {
+        const trimmed = item.trim();
+        if (!trimmed) return;
+        const colIdx = trimmed.indexOf(":");
+        if (colIdx > 0) {
+            const label = trimmed.substring(0, colIdx).trim();
+            const rest = trimmed.substring(colIdx + 1);
+            const m = rest.match(/([0-9\.]+)\%?\s*,\s*([0-9\.]+)\%?/);
+            if (m) {
+                const x = Math.max(0, Math.min(100, parseFloat(m[1])));
+                const y = Math.max(0, Math.min(100, parseFloat(m[2])));
+                pins.push({
+                    id: `pin_${idx}_${Date.now()}`,
+                    label: label || `Marker ${idx + 1}`,
+                    x: Math.round(x * 10) / 10,
+                    y: Math.round(y * 10) / 10
+                });
+            }
+        }
+    });
+    return pins;
+}
+
+function serializeDisplayPins(pins) {
+    if (!pins || !Array.isArray(pins)) return "";
+    return pins.map(p => `${p.label || 'Marker'}: ${Math.round(p.x)}%, ${Math.round(p.y)}%`).join(" | ");
+}
+
 async function loadDisplayMap() {
     try {
         const res = await fetch("/api/campaign/world_maps");
         const data = await res.json();
-        const maps = data.records || [];
+        currentDisplayMaps = data.records || [];
         const imgEl = document.getElementById("display-map-img");
         const emptyEl = document.getElementById("display-map-empty");
         const notesEl = document.getElementById("display-map-notes");
         const pinsContainer = document.getElementById("display-map-pins");
 
-        if (maps.length > 0 && maps[0].image_url) {
-            imgEl.src = maps[0].image_url;
+        if (currentDisplayMaps.length > 0 && currentDisplayMaps[0].image_url) {
+            const mapData = currentDisplayMaps[0];
+            imgEl.src = mapData.image_url;
             imgEl.style.display = "block";
             emptyEl.style.display = "none";
-            notesEl.textContent = maps[0].notes || "";
+            notesEl.textContent = mapData.notes || "";
 
-            // Parse and render pins (e.g. "Party: 45%, 60% | Dungeon: 70%, 30%")
-            if (pinsContainer) {
-                pinsContainer.innerHTML = "";
-                const pinsRaw = maps[0].pins || "";
-                if (pinsRaw.trim()) {
-                    const pinItems = pinsRaw.split("|");
-                    pinItems.forEach(item => {
-                        const parts = item.split(":");
-                        if (parts.length >= 2) {
-                            const label = parts[0].trim();
-                            const coords = parts[1].match(/(\d+)%?\s*,\s*(\d+)%?/);
-                            if (coords) {
-                                const left = coords[1];
-                                const top = coords[2];
-                                const pin = document.createElement("div");
-                                pin.style.cssText = `
-                                    position: absolute;
-                                    left: ${left}%;
-                                    top: ${top}%;
-                                    transform: translate(-50%, -100%);
-                                    display: flex;
-                                    flex-direction: column;
-                                    align-items: center;
-                                    pointer-events: auto;
-                                `;
-                                pin.innerHTML = `
-                                    <span style="background:rgba(20,16,12,0.9); border:1px solid #d4af37; color:#d4af37; padding:2px 6px; border-radius:4px; font-size:12px; font-weight:bold; font-family:'Cinzel', serif; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,0.8);">${label}</span>
-                                    <span style="font-size:20px; text-shadow:0 0 5px black;">📍</span>
-                                `;
-                                pinsContainer.appendChild(pin);
-                            }
-                        }
-                    });
-                }
-            }
+            currentDisplayPins = parseDisplayPins(mapData.pins || "");
+            renderDisplayPins();
         } else {
             imgEl.style.display = "none";
             emptyEl.style.display = "block";
@@ -205,6 +217,96 @@ async function loadDisplayMap() {
     } catch (e) {
         console.error("Failed to load map:", e);
     }
+}
+
+function renderDisplayPins() {
+    const pinsContainer = document.getElementById("display-map-pins");
+    if (!pinsContainer) return;
+    pinsContainer.innerHTML = "";
+
+    currentDisplayPins.forEach((pin, idx) => {
+        const pinEl = document.createElement("div");
+        pinEl.dataset.pinIndex = idx;
+        pinEl.style.cssText = `
+            position: absolute;
+            left: ${pin.x}%;
+            top: ${pin.y}%;
+            transform: translate(-50%, -100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+            cursor: grab;
+            user-select: none;
+            z-index: 10;
+        `;
+        pinEl.innerHTML = `
+            <span style="background:rgba(20,16,12,0.92); border:1px solid #d4af37; color:#d4af37; padding:3px 8px; border-radius:4px; font-size:12px; font-weight:bold; font-family:'Cinzel', serif; white-space:nowrap; box-shadow:0 3px 10px rgba(0,0,0,0.85);">${pin.label}</span>
+            <span style="font-size:26px; filter:drop-shadow(0 2px 5px black); line-height:1;">📍</span>
+        `;
+
+        setupDisplayPinDrag(pinEl, idx);
+        pinsContainer.appendChild(pinEl);
+    });
+}
+
+function setupDisplayPinDrag(pinEl, pinIndex) {
+    let isDragging = false;
+    let wrapper = null;
+
+    function onPointerDown(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        isDragging = true;
+        wrapper = document.getElementById("map-img-wrapper");
+        pinEl.style.cursor = "grabbing";
+        if (pinEl.setPointerCapture) pinEl.setPointerCapture(e.pointerId);
+
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
+    }
+
+    function onPointerMove(e) {
+        if (!isDragging || !wrapper) return;
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        let posX = ((e.clientX - rect.left) / rect.width) * 100;
+        let posY = ((e.clientY - rect.top) / rect.height) * 100;
+
+        posX = Math.max(0, Math.min(100, posX));
+        posY = Math.max(0, Math.min(100, posY));
+
+        currentDisplayPins[pinIndex].x = Math.round(posX * 10) / 10;
+        currentDisplayPins[pinIndex].y = Math.round(posY * 10) / 10;
+
+        pinEl.style.left = `${currentDisplayPins[pinIndex].x}%`;
+        pinEl.style.top = `${currentDisplayPins[pinIndex].y}%`;
+    }
+
+    async function onPointerUp(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        pinEl.style.cursor = "grab";
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+
+        // Auto-save updated pin coordinates back to database
+        if (currentDisplayMaps.length > 0) {
+            currentDisplayMaps[0].pins = serializeDisplayPins(currentDisplayPins);
+            try {
+                await fetch("/api/campaign/world_maps", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({records: currentDisplayMaps})
+                });
+            } catch (saveErr) {
+                console.warn("Failed to save dragged pin position:", saveErr);
+            }
+        }
+    }
+
+    pinEl.addEventListener("pointerdown", onPointerDown);
 }
 
 async function loadDisplayObjectives() {

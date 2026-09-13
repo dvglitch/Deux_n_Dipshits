@@ -861,9 +861,61 @@ async function saveSpellsCollection() {
     }
 }
 
-// --- Maps Collection ---
+// --- Maps Collection & Interactive Marker Dragging ---
+let currentEditingMapRowId = null;
+let currentModalPins = [];
+let availableStaticMaps = [];
+
+function parsePins(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'object') return [raw];
+    if (typeof raw !== 'string') return [];
+    
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+    } catch(e) {}
+
+    const pins = [];
+    const items = raw.split(/\||\n/);
+    items.forEach((item, idx) => {
+        const trimmed = item.trim();
+        if (!trimmed) return;
+        const colIdx = trimmed.indexOf(":");
+        if (colIdx > 0) {
+            const label = trimmed.substring(0, colIdx).trim();
+            const rest = trimmed.substring(colIdx + 1);
+            const m = rest.match(/([0-9\.]+)\%?\s*,\s*([0-9\.]+)\%?/);
+            if (m) {
+                const x = Math.max(0, Math.min(100, parseFloat(m[1])));
+                const y = Math.max(0, Math.min(100, parseFloat(m[2])));
+                pins.push({
+                    id: `pin_${idx}_${Date.now()}`,
+                    label: label || `Marker ${idx + 1}`,
+                    x: Math.round(x * 10) / 10,
+                    y: Math.round(y * 10) / 10
+                });
+            }
+        }
+    });
+    return pins;
+}
+
+function serializePins(pins) {
+    if (!pins || !Array.isArray(pins)) return "";
+    return pins.map(p => `${p.label || 'Marker'}: ${Math.round(p.x)}%, ${Math.round(p.y)}%`).join(" | ");
+}
+
 async function loadMaps() {
     try {
+        try {
+            const mapFilesRes = await fetch('/api/maps');
+            availableStaticMaps = await mapFilesRes.json();
+        } catch (me) {
+            availableStaticMaps = [];
+        }
+
         const res = await fetch('/api/campaign/world_maps');
         const data = await res.json();
         const tbody = document.getElementById('maint-maps-tbody');
@@ -884,14 +936,284 @@ function addMapRow(data = {}) {
     const tbody = document.getElementById('maint-maps-tbody');
     if (!tbody) return;
     const tr = document.createElement('tr');
+    const rowId = `map_row_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    tr.id = rowId;
+
+    const pinsList = parsePins(data.pins || '');
+    const pinCount = pinsList.length;
+
     tr.innerHTML = `
-        <td><input type="text" class="m-title" value="${data.name || ''}" placeholder="Map Name" style="width:100%;"></td>
-        <td><input type="text" class="m-url" value="${data.image_url || ''}" placeholder="Image URL / Path" style="width:100%;"></td>
-        <td><input type="text" class="m-pins" value="${data.pins || ''}" placeholder="Party: (45%, 60%), Dungeon: (70%, 30%)" style="width:100%;"></td>
-        <td><input type="text" class="m-notes" value="${data.notes || ''}" placeholder="Notes" style="width:100%;"></td>
+        <td><input type="text" class="m-title" value="${escapeHtml(data.name || '')}" placeholder="e.g. Sword Coast" style="width:100%;"></td>
+        <td>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <input type="text" class="m-url" value="${escapeHtml(data.image_url || '')}" placeholder="/static/maps/map.png or https://..." style="flex:1;">
+                <input type="file" class="m-file" accept="image/*" style="display:none;" onchange="handleMapFileUpload(this, '${rowId}')">
+                <button type="button" class="maint-btn-primary" style="padding:4px 8px; font-size:11px;" onclick="this.previousElementSibling.click()">Upload</button>
+            </div>
+        </td>
+        <td>
+            <input type="hidden" class="m-pins" value="${escapeHtml(typeof data.pins === 'string' ? data.pins : serializePins(data.pins))}">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <button type="button" class="maint-btn-primary" style="background:#4a3b2c; border:1px solid #d4af37; font-size:12px; padding:5px 10px; font-weight:bold;" onclick="openMapMarkerModal('${rowId}')">
+                    📍 Edit Markers (<span class="m-pin-count">${pinCount}</span>)
+                </button>
+            </div>
+        </td>
+        <td><input type="text" class="m-notes" value="${escapeHtml(data.notes || '')}" placeholder="Notes (e.g. current region)" style="width:100%;"></td>
         <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
     `;
     tbody.appendChild(tr);
+}
+
+async function handleMapFileUpload(input, rowId) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const tr = document.getElementById(rowId);
+    const urlInput = tr ? tr.querySelector('.m-url') : null;
+
+    showMaintStatus('Uploading map image...');
+    try {
+        const res = await fetch('/api/campaign/upload_map', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await res.json();
+        if (res.ok) {
+            if (urlInput) urlInput.value = result.map_url;
+            showMaintStatus(`Map uploaded: ${result.filename}`);
+        } else {
+            throw new Error(result.error || 'Upload failed');
+        }
+    } catch (e) {
+        showMaintStatus('Map upload error: ' + e.message, true);
+    }
+}
+
+function openMapMarkerModal(rowId) {
+    currentEditingMapRowId = rowId;
+    const tr = document.getElementById(rowId);
+    if (!tr) return;
+
+    const title = tr.querySelector('.m-title')?.value || 'World Map';
+    const url = (tr.querySelector('.m-url')?.value || '').trim();
+    const pinsRaw = tr.querySelector('.m-pins')?.value || '';
+
+    if (!url) {
+        alert("Please enter or upload a map image URL first!");
+        return;
+    }
+
+    currentModalPins = parsePins(pinsRaw);
+
+    const modal = document.getElementById('map-marker-modal');
+    const titleEl = document.getElementById('modal-map-title');
+    const imgEl = document.getElementById('modal-map-img');
+
+    if (titleEl) titleEl.textContent = `📍 Editing Markers: ${title}`;
+    if (imgEl) {
+        imgEl.src = url;
+        imgEl.onload = () => {
+            renderModalPins();
+        };
+        imgEl.onerror = () => {
+            alert(`Unable to load image from: ${url}`);
+        };
+    }
+
+    if (modal) modal.style.display = 'flex';
+    renderModalPins();
+}
+
+function closeMapMarkerModal() {
+    const modal = document.getElementById('map-marker-modal');
+    if (modal) modal.style.display = 'none';
+    currentEditingMapRowId = null;
+    currentModalPins = [];
+}
+
+function renderModalPins() {
+    const layer = document.getElementById('modal-map-pins-layer');
+    const listEl = document.getElementById('modal-marker-list');
+    const countEl = document.getElementById('modal-marker-count');
+
+    if (countEl) countEl.textContent = currentModalPins.length;
+    if (!layer || !listEl) return;
+
+    layer.innerHTML = '';
+    listEl.innerHTML = '';
+
+    currentModalPins.forEach((pin, idx) => {
+        const pinEl = document.createElement('div');
+        pinEl.className = 'draggable-pin';
+        pinEl.dataset.pinIndex = idx;
+        pinEl.style.cssText = `
+            position: absolute;
+            left: ${pin.x}%;
+            top: ${pin.y}%;
+            transform: translate(-50%, -100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+            cursor: grab;
+            z-index: 10;
+        `;
+        pinEl.innerHTML = `
+            <span style="background:rgba(20,16,12,0.92); border:1px solid #d4af37; color:#d4af37; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:bold; font-family:'Cinzel', serif; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.8);">${escapeHtml(pin.label)}</span>
+            <span style="font-size:24px; filter:drop-shadow(0 2px 4px black); line-height:1;">📍</span>
+        `;
+
+        setupPinDragging(pinEl, idx);
+        layer.appendChild(pinEl);
+
+        const itemEl = document.createElement('div');
+        itemEl.style.cssText = `
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        `;
+        itemEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <input type="text" value="${escapeHtml(pin.label)}" onchange="updateMarkerLabel(${idx}, this.value)" style="flex:1; margin:0; padding:4px; font-size:12px; background:#111; color:white; border:1px solid #555; border-radius:3px;">
+                <button onclick="deleteModalMarker(${idx})" style="background:#a83232; color:white; border:none; border-radius:3px; padding:3px 8px; margin-left:6px; cursor:pointer;">✕</button>
+            </div>
+            <div style="font-size:11px; color:#aaa; display:flex; justify-content:space-between;">
+                <span>X: ${Math.round(pin.x)}%</span>
+                <span>Y: ${Math.round(pin.y)}%</span>
+            </div>
+        `;
+        listEl.appendChild(itemEl);
+    });
+}
+
+function setupPinDragging(pinEl, pinIndex) {
+    let isDragging = false;
+    let stage = null;
+
+    function onPointerDown(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        isDragging = true;
+        stage = document.getElementById('modal-map-stage');
+        pinEl.style.cursor = 'grabbing';
+        if (pinEl.setPointerCapture) pinEl.setPointerCapture(e.pointerId);
+
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+    }
+
+    function onPointerMove(e) {
+        if (!isDragging || !stage) return;
+        const rect = stage.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        let posX = ((e.clientX - rect.left) / rect.width) * 100;
+        let posY = ((e.clientY - rect.top) / rect.height) * 100;
+
+        posX = Math.max(0, Math.min(100, posX));
+        posY = Math.max(0, Math.min(100, posY));
+
+        currentModalPins[pinIndex].x = Math.round(posX * 10) / 10;
+        currentModalPins[pinIndex].y = Math.round(posY * 10) / 10;
+
+        pinEl.style.left = `${currentModalPins[pinIndex].x}%`;
+        pinEl.style.top = `${currentModalPins[pinIndex].y}%`;
+
+        const listItems = document.querySelectorAll('#modal-marker-list > div');
+        if (listItems[pinIndex]) {
+            const coordSpan = listItems[pinIndex].querySelector('div:last-child');
+            if (coordSpan) {
+                coordSpan.innerHTML = `<span>X: ${Math.round(posX)}%</span><span>Y: ${Math.round(posY)}%</span>`;
+            }
+        }
+    }
+
+    function onPointerUp(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        pinEl.style.cursor = 'grab';
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+    }
+
+    pinEl.addEventListener('pointerdown', onPointerDown);
+}
+
+function handleMapStageClick(e) {
+    if (e.target.closest('.draggable-pin')) return;
+    const stage = document.getElementById('modal-map-stage');
+    if (!stage) return;
+
+    const rect = stage.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    let posX = ((e.clientX - rect.left) / rect.width) * 100;
+    let posY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    posX = Math.max(0, Math.min(100, posX));
+    posY = Math.max(0, Math.min(100, posY));
+
+    const pinLabel = prompt("Enter marker label (e.g. Party, Boss, Cave, Town):", "Point of Interest");
+    if (!pinLabel || !pinLabel.trim()) return;
+
+    currentModalPins.push({
+        id: `pin_${Date.now()}`,
+        label: pinLabel.trim(),
+        x: Math.round(posX * 10) / 10,
+        y: Math.round(posY * 10) / 10
+    });
+
+    renderModalPins();
+}
+
+function addPresetMarker(label) {
+    currentModalPins.push({
+        id: `pin_${Date.now()}`,
+        label: label,
+        x: 50,
+        y: 50
+    });
+    renderModalPins();
+}
+
+function updateMarkerLabel(idx, val) {
+    if (currentModalPins[idx]) {
+        currentModalPins[idx].label = val.trim() || `Marker ${idx + 1}`;
+        renderModalPins();
+    }
+}
+
+function deleteModalMarker(idx) {
+    currentModalPins.splice(idx, 1);
+    renderModalPins();
+}
+
+function clearAllMarkers() {
+    if (confirm("Clear all markers on this map?")) {
+        currentModalPins = [];
+        renderModalPins();
+    }
+}
+
+function saveMapMarkersFromModal() {
+    if (!currentEditingMapRowId) return;
+    const tr = document.getElementById(currentEditingMapRowId);
+    if (tr) {
+        const pinsInput = tr.querySelector('.m-pins');
+        const countSpan = tr.querySelector('.m-pin-count');
+        const serialized = serializePins(currentModalPins);
+        if (pinsInput) pinsInput.value = serialized;
+        if (countSpan) countSpan.textContent = currentModalPins.length;
+    }
+    closeMapMarkerModal();
+    saveMapsCollection();
 }
 
 async function saveMapsCollection() {

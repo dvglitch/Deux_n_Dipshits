@@ -114,3 +114,34 @@ def upload_portrait():
         logger.exception("Failed to upload portrait for %s: %s", player_id, err)
         return jsonify({"error": "Upload failed", "message": str(err)}), 500
 
+
+@campaign_bp.post("/upload_map")
+def upload_map():
+    """Upload a world map image to static maps storage."""
+    from pathlib import Path
+    import re
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    if not file or not file.filename:
+        return jsonify({"error": "Empty or invalid file"}), 400
+
+    allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
+    ext = Path(file.filename).suffix.lower()
+    if ext not in allowed_exts:
+        return jsonify({"error": f"Invalid file type '{ext}'. Allowed: {', '.join(allowed_exts)}"}), 400
+
+    clean_name = re.sub(r"[^a-zA-Z0-9_\.\-]", "_", file.filename)
+    maps_dir = Path(__file__).resolve().parents[1] / "static" / "maps"
+    maps_dir.mkdir(parents=True, exist_ok=True)
+    dest = maps_dir / clean_name
+
+    try:
+        file.save(str(dest))
+        return jsonify({"filename": clean_name, "map_url": f"/static/maps/{clean_name}", "status": "uploaded"})
+    except Exception as err:
+        logger.exception("Failed to upload map: %s", err)
+        return jsonify({"error": "Upload failed", "message": str(err)}), 500
+

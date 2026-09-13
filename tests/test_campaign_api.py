@@ -115,6 +115,24 @@ class CampaignApiTests(unittest.TestCase):
         self.assertEqual(len(get_rec.get_json()["records"]), 1)
         self.assertEqual(get_rec.get_json()["records"][0]["title"], "The Journey Begins")
 
+    def test_map_upload_and_list_api(self):
+        import io
+        # 1. Test listing maps
+        list_res = self.client.get("/api/maps")
+        self.assertEqual(list_res.status_code, 200)
+        self.assertIsInstance(list_res.get_json(), list)
+
+        # 2. Test map upload
+        fake_image = (io.BytesIO(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"), "test_dungeon_map.png")
+        data = {
+            "file": fake_image
+        }
+        upload_res = self.client.post("/api/campaign/upload_map", data=data, content_type="multipart/form-data")
+        self.assertEqual(upload_res.status_code, 200)
+        res_json = upload_res.get_json()
+        self.assertEqual(res_json["status"], "uploaded")
+        self.assertTrue(res_json["map_url"].startswith("/static/maps/"))
+
 
 if __name__ == "__main__":
     unittest.main()
