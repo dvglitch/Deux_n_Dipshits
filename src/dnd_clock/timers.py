@@ -14,6 +14,7 @@ custom_bg_url = settings.get("custom_bg_url", "")
 timer_done_sound = settings.get("timer_done_sound", "synthetic")
 hand_raise_sound = settings.get("hand_raise_sound", "synthetic")
 display_tab = settings.get("display_tab", "timers")
+active_map_id = settings.get("active_map_id", "")
 
 max_timer_id = settings.get("max_timer_id", 6)
 active_timer_ids = settings.get("active_timer_ids", list(range(1, max_timer_id + 1)))
@@ -32,6 +33,7 @@ control_state = {
     "timer_done_sound": timer_done_sound,
     "hand_raise_sound": hand_raise_sound,
     "display_tab": display_tab,
+    "active_map_id": active_map_id,
     "cooldown_mode": True
 }
 
@@ -46,6 +48,7 @@ def save_current_state():
         "DEFAULT_DURATION": DEFAULT_DURATION,
         "cooldown_mode": True,
         "display_tab": control_state.get("display_tab", "timers"),
+        "active_map_id": control_state.get("active_map_id", ""),
         "timer_durations": {str(k): v["duration"] for k, v in timers.items()},
         "timer_cooldown_durations": {str(k): v.get("cooldown_duration", v["duration"]) for k, v in timers.items()},
         "timer_names": {str(k): v["name"] for k, v in timers.items()},
@@ -216,6 +219,8 @@ def update_control_state(key, value):
         control_state["hand_raise_sound"] = hand_raise_sound
     elif key == "display_tab":
         control_state["display_tab"] = str(value)
+    elif key == "active_map_id":
+        control_state["active_map_id"] = str(value)
     
     save_current_state()
     return control_state
@@ -318,6 +323,23 @@ def set_timer_meta(timer_id, accent_color=None, portrait_url=None, is_enemy=None
     if character_name is not None: t["character_name"] = str(character_name)
     save_current_state()
 
+    # Attempt to persist updated portrait/color/character_name to campaign database
+    try:
+        from .database.factory import create_campaign_repository
+        repo = create_campaign_repository()
+        try:
+            profiles = repo.load_collection("player_profiles")
+            idx = int(timer_id) - 1
+            if 0 <= idx < len(profiles):
+                if accent_color is not None: profiles[idx]["accent_color"] = str(accent_color)
+                if portrait_url is not None: profiles[idx]["portrait_url"] = str(portrait_url)
+                if character_name is not None: profiles[idx]["character_name"] = str(character_name)
+                repo.save_collection("player_profiles", profiles)
+        finally:
+            repo.close()
+    except Exception:
+        pass
+
 def delete_timer(timer_id):
     if timer_id in timers:
         del timers[timer_id]
@@ -328,7 +350,6 @@ def delete_timer(timer_id):
     save_current_state()
 
 def toggle_hand(timer_id):
-    if control_state["locked"]: return
     if timer_id not in timers: return
     t = timers[timer_id]
     t["raised_hand"] = not t.get("raised_hand", False)
@@ -338,7 +359,6 @@ def set_condition(timer_id, condition):
     timers[timer_id]["condition"] = condition
 
 def toggle_timer(timer_id):
-    if control_state["locked"]: return
     if timer_id not in timers: return
     t = timers[timer_id]
     if t["remaining"] > 0:

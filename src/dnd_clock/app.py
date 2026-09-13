@@ -17,10 +17,12 @@ from .timers import timer_loop
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = PACKAGE_ROOT.parents[1]
 STATIC_ROOT = PACKAGE_ROOT / "static"
 SOUNDS_ROOT = STATIC_ROOT / "sounds"
 IMAGES_ROOT = STATIC_ROOT / "images"
 MAPS_ROOT = STATIC_ROOT / "maps"
+ROOT_STATIC_MAPS = PROJECT_ROOT / "static" / "maps"
 
 
 def create_app(start_background_task=True):
@@ -41,6 +43,10 @@ def create_app(start_background_task=True):
 
     @flask_app.route("/static/maps/<path:filename>")
     def serve_external_maps(filename):
+        if (MAPS_ROOT / filename).exists():
+            return send_from_directory(MAPS_ROOT, filename)
+        if ROOT_STATIC_MAPS.exists() and (ROOT_STATIC_MAPS / filename).exists():
+            return send_from_directory(ROOT_STATIC_MAPS, filename)
         return send_from_directory(MAPS_ROOT, filename)
 
     flask_app.register_blueprint(control_bp)
@@ -70,12 +76,13 @@ def create_app(start_background_task=True):
     @flask_app.route("/api/maps")
     def list_maps():
         MAPS_ROOT.mkdir(parents=True, exist_ok=True)
-        files = [
-            path.name
-            for path in MAPS_ROOT.iterdir()
-            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
-        ]
-        return jsonify(sorted(files))
+        all_files = set()
+        for folder in (MAPS_ROOT, ROOT_STATIC_MAPS):
+            if folder.exists():
+                for path in folder.iterdir():
+                    if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}:
+                        all_files.add(path.name)
+        return jsonify(sorted(list(all_files)))
 
     @flask_app.get("/api/persistence/health")
     def persistence_health():

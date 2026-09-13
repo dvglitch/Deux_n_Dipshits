@@ -98,12 +98,52 @@ function setDmFilter(filter) {
     renderTimers();
 }
 
+let dmMapsList = [];
+let dmActiveMapId = "";
+
+async function loadDmMaps() {
+    try {
+        const res = await fetch("/api/campaign/world_maps");
+        const data = await res.json();
+        dmMapsList = data.records || [];
+        const mapSelect = document.getElementById("dmActiveMapSelect");
+        if (mapSelect) {
+            mapSelect.innerHTML = dmMapsList.length === 0
+                ? `<option value="">-- No Maps Configured --</option>`
+                : dmMapsList.map(m => {
+                    const id = m.id || m.name;
+                    const isSel = String(id) === String(dmActiveMapId) || String(m.name) === String(dmActiveMapId);
+                    return `<option value="${id}" ${isSel ? 'selected' : ''}>🗺️ ${m.name || 'World Map'}</option>`;
+                }).join("");
+        }
+    } catch (e) {
+        console.warn("Failed to load maps on DM screen:", e);
+    }
+}
+
 function changeDmDisplayTab() {
     const select = document.getElementById("dmDisplayTabSelect");
     if (!select) return;
     const tab = select.value;
     socket.emit("set_display_tab", {tab});
+
+    const mapContainer = document.getElementById("dm-active-map-container");
+    if (mapContainer) {
+        mapContainer.style.display = (tab === "map") ? "flex" : "none";
+    }
+    if (tab === "map") {
+        loadDmMaps();
+    }
 }
+
+function changeDmActiveMap() {
+    const select = document.getElementById("dmActiveMapSelect");
+    if (!select || !select.value) return;
+    dmActiveMapId = select.value;
+    socket.emit("set_active_map", {map_id: dmActiveMapId, tab: "map"});
+}
+
+loadDmMaps();
 
 function toggleDmLock() {
     const toggle = document.getElementById("dmLockToggle");
@@ -119,6 +159,42 @@ function confirmResetAll() {
 
 function toggleAll() {
     socket.emit("toggle_all");
+}
+
+function toggle(e, timer) {
+    if (e) e.stopPropagation();
+    socket.emit("toggle", {timer});
+}
+
+function reset(e, timer) {
+    if (e) e.stopPropagation();
+    socket.emit("reset", {timer});
+}
+
+function adjust(e, timer, delta) {
+    if (e) e.stopPropagation();
+    socket.emit("adjust_timer", {timer, delta});
+}
+
+function setTimerSeconds(e, timer) {
+    if (e) e.stopPropagation();
+    const input = document.getElementById(`custom-time-input-${timer}`);
+    if (!input) return;
+    const val = parseInt(input.value, 10);
+    if (!isNaN(val) && val >= 0) {
+        socket.emit("set_timer", {timer, seconds: val});
+        input.value = "";
+    }
+}
+
+function setCooldownDuration(e, timer) {
+    if (e) e.stopPropagation();
+    const input = document.getElementById(`custom-duration-input-${timer}`);
+    if (!input) return;
+    const val = parseInt(input.value, 10);
+    if (!isNaN(val) && val > 0) {
+        socket.emit("set_timer_duration", {timer, duration: val});
+    }
 }
 
 function openAddEnemyModal() {
@@ -208,14 +284,29 @@ socket.on("control_update", (data) => {
         if (tabSelect && document.activeElement !== tabSelect) {
             tabSelect.value = data.display_tab;
         }
+        const mapContainer = document.getElementById("dm-active-map-container");
+        if (mapContainer) {
+            mapContainer.style.display = (data.display_tab === "map") ? "flex" : "none";
+        }
+    }
+
+    if (data.active_map_id !== undefined && data.active_map_id !== dmActiveMapId) {
+        dmActiveMapId = data.active_map_id;
+        loadDmMaps();
     }
 
     const lockToggle = document.getElementById("dmLockToggle");
+    const lockLabel = document.getElementById("dmLockLabel");
     if (lockToggle) {
         lockToggle.checked = Boolean(data.locked);
     }
+    if (lockLabel) {
+        lockLabel.textContent = data.locked ? "🔒 Players Locked" : "🔓 Players Free";
+        lockLabel.style.color = data.locked ? "#f44336" : "#4CAF50";
+    }
 
-    document.body.style.opacity = locked ? 0.5 : 1;
+    // DM screen always remains fully interactive and bright
+    document.body.style.opacity = 1;
     renderTimers();
 });
 
@@ -363,6 +454,20 @@ function renderTimers() {
                             <button id="adj-down-btn-${i}" class="adj-btn" style="margin:0; width:100%; background:#333;">-30s</button>
                         </div>
 
+                        <!-- Manual Time & Cooldown Set -->
+                        <div style="background:rgba(0,0,0,0.25); border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;">
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <span style="font-size:12px; color:#aaa; width:65px; text-align:left;">Set Time:</span>
+                                <input id="custom-time-input-${i}" type="number" placeholder="Seconds" style="flex:1; margin:0; padding:4px 8px; font-size:13px; text-align:center; background:#111; color:white; border:1px solid #555; border-radius:4px;">
+                                <button onclick="setTimerSeconds(event, ${i})" style="padding:4px 10px; font-size:12px; background:#4a3b2c; border:1px solid #d4af37; color:#d4af37; font-weight:bold; margin:0;">Set</button>
+                            </div>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <span style="font-size:12px; color:#aaa; width:65px; text-align:left;">Default:</span>
+                                <input id="custom-duration-input-${i}" type="number" value="${t.duration || 60}" placeholder="Cooldown (s)" onchange="setCooldownDuration(event, ${i})" style="flex:1; margin:0; padding:4px 8px; font-size:13px; text-align:center; background:#111; color:white; border:1px solid #555; border-radius:4px;">
+                                <span style="font-size:11px; opacity:0.7;">s</span>
+                            </div>
+                        </div>
+
                         <div style="display:flex; gap:8px; margin-top:10px;">
                             <button onclick="toggleExpand(${i})" style="flex:2; margin:0; background:#333; font-size:13px;">⬆ Collapse</button>
                             ${isEnemy ? `<button onclick="deleteCombatant(event, ${i})" style="flex:1; margin:0; background:#8b2525; font-size:13px;">Delete</button>` : ''}
@@ -401,7 +506,6 @@ function renderTimers() {
             const status = t.remaining <= 0 ? "Ready" : (t.running ? "Running" : "Paused");
             const pos = t.position ? `Order: #${t.position}` : "";
             const toggleTxt = t.running ? "Pause" : "Start";
-            const adOpc = locked ? "0.5" : "1";
             const adjDisplay = adjustLocked ? "none" : "grid";
 
             card.querySelector('.status-disp').textContent = status;
@@ -412,8 +516,13 @@ function renderTimers() {
             if (adjContainer) adjContainer.style.display = adjDisplay;
             
             card.querySelectorAll('.adj-btn').forEach(btn => {
-                btn.style.opacity = adOpc;
+                btn.style.opacity = "1";
             });
+
+            const durInput = document.getElementById(`custom-duration-input-${i}`);
+            if (durInput && document.activeElement !== durInput) {
+                durInput.value = t.duration || 60;
+            }
 
             const adjUp = document.getElementById(`adj-up-btn-${i}`);
             if (adjUp) {
@@ -453,24 +562,20 @@ function renderTimers() {
 function toggle(e, i) {
     // Prevent bubbling of click event resolving multiple tabs breaking
     e.stopPropagation();
-    if (locked) return;
     socket.emit("toggle", {timer: i});
 }
 
 function reset(e, i) {
     e.stopPropagation();
-    if (locked) return;
     socket.emit("reset", {timer: i, start: true});
 }
 
 function toggleHand(e, i) {
     e.stopPropagation();
-    if (locked) return;
     socket.emit("toggle_hand", {timer: i});
 }
 
 function adjust(e, i, delta) {
     e.stopPropagation();
-    if (locked || adjustLocked) return;
     socket.emit("adjust_timer", {timer: i, delta});
 }

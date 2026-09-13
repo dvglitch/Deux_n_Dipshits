@@ -747,7 +747,12 @@ function escapeHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function getPlayerOptionsHtml(selectedVal = '') {
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function getPlayersList() {
     const playerRows = Array.from(document.querySelectorAll('#maint-players-tbody tr'));
     const players = [];
     playerRows.forEach(r => {
@@ -762,23 +767,79 @@ function getPlayerOptionsHtml(selectedVal = '') {
             });
         }
     });
+    return players;
+}
 
-    let optionsHtml = `<option value="">All Players</option>`;
-    let found = !selectedVal;
-    players.forEach(p => {
-        const isSel = selectedVal && (
-            selectedVal.toLowerCase() === p.val.toLowerCase() ||
-            selectedVal.toLowerCase() === p.name.toLowerCase() ||
-            selectedVal.toLowerCase() === p.charName.toLowerCase()
-        );
-        if (isSel) found = true;
-        optionsHtml += `<option value="${escapeHtml(p.val)}" ${isSel ? 'selected' : ''}>${escapeHtml(p.label)}</option>`;
-    });
-
-    if (selectedVal && !found) {
-        optionsHtml += `<option value="${escapeHtml(selectedVal)}" selected>${escapeHtml(selectedVal)}</option>`;
+function parseAssignedPlayers(assignedVal) {
+    if (!assignedVal) return [];
+    if (Array.isArray(assignedVal)) return assignedVal.map(String).map(s => s.trim()).filter(Boolean);
+    if (typeof assignedVal === 'string') {
+        const trimmed = assignedVal.trim();
+        if (!trimmed || trimmed.toLowerCase() === 'all' || trimmed.toLowerCase() === 'all players') return [];
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const arr = JSON.parse(trimmed);
+                if (Array.isArray(arr)) return arr.map(String).map(s => s.trim()).filter(Boolean);
+            } catch(e) {}
+        }
+        return trimmed.split(',').map(s => s.trim()).filter(Boolean);
     }
-    return optionsHtml;
+    return [];
+}
+
+function formatAssignedSummary(assignedList) {
+    if (!assignedList || assignedList.length === 0) return '👥 All Players';
+    if (assignedList.length === 1) return `👤 ${assignedList[0]}`;
+    if (assignedList.length === 2) return `👥 ${assignedList[0]}, ${assignedList[1]}`;
+    return `👥 ${assignedList.length} Players (${assignedList.slice(0, 2).join(', ')}...)`;
+}
+
+// Global click to close spell assignment dropdowns
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.spell-assign-container')) {
+        document.querySelectorAll('.spell-assign-dropdown').forEach(d => d.style.display = 'none');
+    }
+});
+
+function toggleSpellAssignDropdown(btn) {
+    const container = btn.closest('.spell-assign-container');
+    const dropdown = container ? container.querySelector('.spell-assign-dropdown') : null;
+    if (!dropdown) return;
+    const isShown = dropdown.style.display === 'block';
+    document.querySelectorAll('.spell-assign-dropdown').forEach(d => d.style.display = 'none');
+    dropdown.style.display = isShown ? 'none' : 'block';
+}
+
+function onSpellAssignCheckboxChange(input) {
+    const container = input.closest('.spell-assign-container');
+    if (!container) return;
+
+    const allCb = container.querySelector('.assign-cb-all');
+    const playerCbs = Array.from(container.querySelectorAll('.assign-cb-player'));
+    const hiddenInput = container.querySelector('.s-assigned-hidden');
+    const summarySpan = container.querySelector('.spell-assign-summary');
+
+    if (input.classList.contains('assign-cb-all')) {
+        if (input.checked) {
+            playerCbs.forEach(cb => cb.checked = false);
+        }
+    } else {
+        if (input.checked && allCb) {
+            allCb.checked = false;
+        }
+    }
+
+    const selectedValues = playerCbs.filter(cb => cb.checked).map(cb => cb.value);
+    if (selectedValues.length === 0 && allCb) {
+        allCb.checked = true;
+    }
+
+    if (hiddenInput) {
+        hiddenInput.value = JSON.stringify(selectedValues);
+    }
+    if (summarySpan) {
+        summarySpan.textContent = formatAssignedSummary(selectedValues);
+    }
 }
 
 // --- Spells Collection ---
@@ -819,16 +880,62 @@ function addSpellRow(data = {}) {
     const tbody = document.getElementById('maint-spells-tbody');
     if (!tbody) return;
     const tr = document.createElement('tr');
-    const assignedVal = data.assigned_to || '';
+    const assignedList = parseAssignedPlayers(data.assigned_to || data.assigned_players);
+    const players = getPlayersList();
+    const isAll = assignedList.length === 0;
+
+    const actionType = data.action_type || (data.resets_timer === false ? 'Bonus Action' : 'Action');
+
+    let playerCheckboxesHtml = `
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:6px; cursor:pointer; color:#d4af37; font-weight:bold;">
+            <input type="checkbox" class="assign-cb-all" ${isAll ? 'checked' : ''} onchange="onSpellAssignCheckboxChange(this)">
+            All Players
+        </label>
+        <div style="border-top:1px solid #444; margin:5px 0;"></div>
+    `;
+
+    players.forEach(p => {
+        const isChecked = !isAll && assignedList.some(a => 
+            a.toLowerCase() === p.val.toLowerCase() || 
+            a.toLowerCase() === p.name.toLowerCase() || 
+            a.toLowerCase() === p.charName.toLowerCase()
+        );
+        playerCheckboxesHtml += `
+            <label style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:4px; cursor:pointer; color:#ddd; white-space:nowrap;">
+                <input type="checkbox" class="assign-cb-player" value="${escapeHtml(p.val)}" ${isChecked ? 'checked' : ''} onchange="onSpellAssignCheckboxChange(this)">
+                ${escapeHtml(p.label)}
+            </label>
+        `;
+    });
+
+    if (players.length === 0) {
+        playerCheckboxesHtml += `<div style="font-size:11px; color:#888; padding:2px;">(Add player profiles in Party tab)</div>`;
+    }
+
     tr.innerHTML = `
         <td><input type="text" class="s-name" value="${escapeHtml(data.name || '')}" placeholder="Spell Name" style="width:100%;"></td>
-        <td><input type="number" class="s-level" value="${data.level !== undefined ? data.level : 1}" min="0" max="9" style="width:60px;"></td>
-        <td><input type="text" class="s-duration" value="${escapeHtml(data.duration || '1 action')}" style="width:100px;"></td>
+        <td><input type="number" class="s-level" value="${data.level !== undefined ? data.level : 1}" min="0" max="9" style="width:50px;"></td>
+        <td>
+            <select class="s-action-type" style="background:#222; color:#d4af37; border:1px solid #555; border-radius:4px; padding:4px 6px; font-size:11px; width:160px;">
+                <option value="Action" ${actionType === 'Action' ? 'selected' : ''}>⚡ Action (Resets Cooldown)</option>
+                <option value="Bonus Action" ${actionType === 'Bonus Action' ? 'selected' : ''}>✨ Bonus Action (No Reset)</option>
+                <option value="Reaction" ${actionType === 'Reaction' ? 'selected' : ''}>🛡️ Reaction (No Reset)</option>
+                <option value="Free" ${actionType === 'Free' ? 'selected' : ''}>🕊️ Free / Utility (No Reset)</option>
+            </select>
+        </td>
+        <td><input type="text" class="s-duration" value="${escapeHtml(data.duration || '1 action')}" style="width:90px;"></td>
         <td style="text-align:center;"><input type="checkbox" class="s-conc" ${data.concentration ? 'checked' : ''}></td>
         <td>
-            <select class="s-assigned" style="width:140px; background:#222; color:white; border:1px solid #555; border-radius:4px; padding:4px;">
-                ${getPlayerOptionsHtml(assignedVal)}
-            </select>
+            <div class="spell-assign-container" style="position:relative; width:160px;">
+                <input type="hidden" class="s-assigned-hidden" value="${escapeHtml(JSON.stringify(assignedList))}">
+                <button type="button" class="spell-assign-btn" onclick="toggleSpellAssignDropdown(this)" style="width:100%; text-align:left; background:#222; color:white; border:1px solid #555; border-radius:4px; padding:6px 8px; font-size:12px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                    <span class="spell-assign-summary" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(formatAssignedSummary(assignedList))}</span>
+                    <span style="font-size:10px; margin-left:4px; opacity:0.7;">▼</span>
+                </button>
+                <div class="spell-assign-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:9999; background:#1c1814; border:1px solid #d4af37; border-radius:6px; padding:8px 12px; min-width:190px; box-shadow:0 8px 24px rgba(0,0,0,0.95); max-height:220px; overflow-y:auto;">
+                    ${playerCheckboxesHtml}
+                </div>
+            </div>
         </td>
         <td><input type="text" class="s-desc" value="${escapeHtml(data.description || '')}" placeholder="Description / effects" style="width:100%;"></td>
         <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
@@ -838,15 +945,30 @@ function addSpellRow(data = {}) {
 
 async function saveSpellsCollection() {
     const rows = Array.from(document.querySelectorAll('#maint-spells-tbody tr'));
-    const records = rows.map((r, idx) => ({
-        id: `spell_${idx + 1}`,
-        name: r.querySelector('.s-name')?.value || '',
-        level: parseInt(r.querySelector('.s-level')?.value, 10) || 0,
-        duration: r.querySelector('.s-duration')?.value || '',
-        concentration: Boolean(r.querySelector('.s-conc')?.checked),
-        assigned_to: r.querySelector('.s-assigned')?.value || '',
-        description: r.querySelector('.s-desc')?.value || ''
-    })).filter(r => r.name);
+    const records = rows.map((r, idx) => {
+        let assigned = [];
+        try {
+            const raw = r.querySelector('.s-assigned-hidden')?.value;
+            assigned = JSON.parse(raw || '[]');
+        } catch(e) {
+            assigned = [];
+        }
+
+        const actionType = r.querySelector('.s-action-type')?.value || 'Action';
+        const resetsTimer = (actionType === 'Action');
+
+        return {
+            id: `spell_${idx + 1}`,
+            name: r.querySelector('.s-name')?.value || '',
+            level: parseInt(r.querySelector('.s-level')?.value, 10) || 0,
+            action_type: actionType,
+            resets_timer: resetsTimer,
+            duration: r.querySelector('.s-duration')?.value || '',
+            concentration: Boolean(r.querySelector('.s-conc')?.checked),
+            assigned_to: assigned,
+            description: r.querySelector('.s-desc')?.value || ''
+        };
+    }).filter(r => r.name);
 
     try {
         const res = await fetch('/api/campaign/spells', {
@@ -907,6 +1029,32 @@ function serializePins(pins) {
     return pins.map(p => `${p.label || 'Marker'}: ${Math.round(p.x)}%, ${Math.round(p.y)}%`).join(" | ");
 }
 
+function getMapSelectOptions(selectedUrl = '') {
+    let opts = `<option value="">-- Choose from static/maps/ --</option>`;
+    availableStaticMaps.forEach(file => {
+        const fullUrl = `/static/maps/${file}`;
+        const isSel = selectedUrl === fullUrl || selectedUrl === file;
+        opts += `<option value="${escapeHtml(fullUrl)}" ${isSel ? 'selected' : ''}>📁 ${escapeHtml(file)}</option>`;
+    });
+    return opts;
+}
+
+function onSelectDiscoveredMap(selectEl, rowId) {
+    const val = selectEl.value;
+    if (!val) return;
+    const tr = document.getElementById(rowId);
+    if (!tr) return;
+    const urlInput = tr.querySelector('.m-url');
+    const titleInput = tr.querySelector('.m-title');
+
+    if (urlInput) urlInput.value = val;
+    if (titleInput && (!titleInput.value || titleInput.value.trim() === '')) {
+        // Derive clean title from filename
+        const filename = val.split('/').pop().replace(/\.[^/.]+$/, "");
+        titleInput.value = filename;
+    }
+}
+
 async function loadMaps() {
     try {
         try {
@@ -922,8 +1070,22 @@ async function loadMaps() {
         if (!tbody) return;
         tbody.innerHTML = '';
         const records = data.records || [];
+        
         if (records.length === 0) {
-            addMapRow();
+            if (availableStaticMaps.length > 0) {
+                // Populate discovered maps automatically for effortless setup
+                availableStaticMaps.forEach(file => {
+                    const cleanTitle = file.replace(/\.[^/.]+$/, "");
+                    addMapRow({
+                        name: cleanTitle,
+                        image_url: `/static/maps/${file}`,
+                        pins: "Party: 50%, 50%",
+                        notes: ""
+                    });
+                });
+            } else {
+                addMapRow();
+            }
         } else {
             records.forEach(r => addMapRow(r));
         }
@@ -938,17 +1100,26 @@ function addMapRow(data = {}) {
     const tr = document.createElement('tr');
     const rowId = `map_row_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     tr.id = rowId;
+    tr.dataset.mapId = data.id || data.name || '';
 
     const pinsList = parsePins(data.pins || '');
     const pinCount = pinsList.length;
+    const imgUrl = data.image_url || '';
 
     tr.innerHTML = `
         <td><input type="text" class="m-title" value="${escapeHtml(data.name || '')}" placeholder="e.g. Sword Coast" style="width:100%;"></td>
         <td>
-            <div style="display:flex; gap:6px; align-items:center;">
-                <input type="text" class="m-url" value="${escapeHtml(data.image_url || '')}" placeholder="/static/maps/map.png or https://..." style="flex:1;">
-                <input type="file" class="m-file" accept="image/*" style="display:none;" onchange="handleMapFileUpload(this, '${rowId}')">
-                <button type="button" class="maint-btn-primary" style="padding:4px 8px; font-size:11px;" onclick="this.previousElementSibling.click()">Upload</button>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="text" class="m-url" value="${escapeHtml(imgUrl)}" placeholder="/static/maps/map.png or https://..." style="flex:1;">
+                    <input type="file" class="m-file" accept="image/*" style="display:none;" onchange="handleMapFileUpload(this, '${rowId}')">
+                    <button type="button" class="maint-btn-primary" style="padding:4px 8px; font-size:11px;" onclick="this.previousElementSibling.click()">Upload</button>
+                </div>
+                ${availableStaticMaps.length > 0 ? `
+                    <select onchange="onSelectDiscoveredMap(this, '${rowId}')" style="background:#222; color:#d4af37; border:1px solid #555; border-radius:4px; font-size:11px; padding:3px 6px;">
+                        ${getMapSelectOptions(imgUrl)}
+                    </select>
+                ` : ''}
             </div>
         </td>
         <td>
@@ -960,9 +1131,23 @@ function addMapRow(data = {}) {
             </div>
         </td>
         <td><input type="text" class="m-notes" value="${escapeHtml(data.notes || '')}" placeholder="Notes (e.g. current region)" style="width:100%;"></td>
-        <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
+        <td>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <button type="button" class="maint-btn-primary" style="background:#1e7f3f; font-size:11px; padding:6px 10px; font-weight:bold; white-space:nowrap;" onclick="showMapOnTv('${rowId}')" title="Set this map active on the TV screen">📺 Show on TV</button>
+                <button class="maint-btn-danger" style="padding:6px 10px; font-size:11px;" onclick="this.closest('tr').remove()">Remove</button>
+            </div>
+        </td>
     `;
     tbody.appendChild(tr);
+}
+
+function showMapOnTv(rowId) {
+    const tr = document.getElementById(rowId);
+    if (!tr) return;
+    const title = tr.querySelector('.m-title')?.value || '';
+    const mapId = tr.dataset.mapId || title;
+    socket.emit("set_active_map", {map_id: mapId, tab: "map"});
+    showMaintStatus(`TV Display switched to: ${title || 'World Map'}`);
 }
 
 async function handleMapFileUpload(input, rowId) {

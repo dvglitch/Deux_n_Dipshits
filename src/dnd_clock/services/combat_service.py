@@ -33,7 +33,7 @@ class CombatService:
     @staticmethod
     def toggle_hand(timer_id_raw: Any) -> bool:
         timer_id = _parse_int(timer_id_raw)
-        if timer_id is None or tm.control_state.get("locked", False):
+        if timer_id is None:
             return False
         tm.toggle_hand(timer_id)
         return True
@@ -49,7 +49,7 @@ class CombatService:
     @staticmethod
     def toggle_timer(timer_id_raw: Any) -> bool:
         timer_id = _parse_int(timer_id_raw)
-        if timer_id is None or tm.control_state.get("locked", False):
+        if timer_id is None:
             return False
         tm.toggle_timer(timer_id)
         return True
@@ -94,7 +94,7 @@ class CombatService:
         delta = _parse_int(delta_raw)
         if timer_id is None or delta is None:
             return False
-        if tm.control_state.get("locked", False) or tm.control_state.get("adjust_locked", False):
+        if tm.control_state.get("adjust_locked", False):
             return False
         tm.adjust_timer(timer_id, delta)
         return True

@@ -52,6 +52,41 @@ class CampaignApiTests(unittest.TestCase):
         self.assertEqual(records[0]["name"], "Thorin")
         self.assertEqual(records[1]["name"], "Gandalf")
 
+    def test_spells_action_type_and_cooldown_persistence(self):
+        payload = {
+            "records": [
+                {
+                    "id": "spell_1",
+                    "name": "Misty Step",
+                    "level": 2,
+                    "action_type": "Bonus Action",
+                    "resets_timer": False,
+                    "duration": "Instantaneous",
+                    "concentration": False,
+                    "assigned_to": ["Thorin"]
+                },
+                {
+                    "id": "spell_2",
+                    "name": "Fireball",
+                    "level": 3,
+                    "action_type": "Action",
+                    "resets_timer": True,
+                    "duration": "Instantaneous",
+                    "concentration": False,
+                    "assigned_to": []
+                }
+            ]
+        }
+        res = self.client.post("/api/campaign/spells", json=payload)
+        self.assertEqual(res.status_code, 200)
+        get_res = self.client.get("/api/campaign/spells")
+        spells = get_res.get_json()["records"]
+        self.assertEqual(len(spells), 2)
+        self.assertEqual(spells[0]["action_type"], "Bonus Action")
+        self.assertFalse(spells[0]["resets_timer"])
+        self.assertEqual(spells[1]["action_type"], "Action")
+        self.assertTrue(spells[1]["resets_timer"])
+
     def test_delete_collection(self):
         self.client.post(
             "/api/campaign/objectives",

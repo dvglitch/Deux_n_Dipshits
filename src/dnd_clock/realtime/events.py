@@ -157,6 +157,17 @@ def register_socket_events(socketio):
         new_state = CombatService.set_display_tab(data["tab"])
         socketio.emit("control_update", new_state)
 
+    @socketio.on("set_active_map")
+    def handle_set_active_map(data):
+        if not isinstance(data, dict) or "map_id" not in data:
+            return
+        map_id = str(data["map_id"])
+        tab = data.get("tab")
+        if tab:
+            CombatService.set_display_tab(tab)
+        new_state = CombatService.update_control_state("active_map_id", map_id)
+        socketio.emit("control_update", new_state)
+
     @socketio.on("add_timer")
     def handle_add_timer(data=None):
         is_enemy = False

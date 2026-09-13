@@ -67,17 +67,11 @@ class TimerBehaviorTests(unittest.TestCase):
         self.assertTrue(timers.timers[1]["running"])
         self.assertFalse(timers.timers[1]["finished"])
 
-    def test_locked_timer_cannot_toggle(self):
-        timers.control_state["locked"] = True
-
+    def test_timer_toggle_running_state(self):
         timers.toggle_timer(1)
-
-        self.assertFalse(timers.timers[1]["running"])
-
-    def test_unlocked_timer_can_toggle(self):
-        timers.toggle_timer(1)
-
         self.assertTrue(timers.timers[1]["running"])
+        timers.toggle_timer(1)
+        self.assertFalse(timers.timers[1]["running"])
 
     def test_condition_is_stored_on_timer(self):
         timers.set_condition(1, "Stunned")

@@ -131,7 +131,16 @@ socket.on("control_update", (data) => {
     if (data.display_tab && data.display_tab !== activeDisplayTab) {
         switchDisplayTab(data.display_tab);
     }
+
+    if (data.active_map_id !== undefined && data.active_map_id !== activeMapId) {
+        activeMapId = data.active_map_id;
+        if (activeDisplayTab === "map") {
+            loadDisplayMap();
+        }
+    }
 });
+
+let activeMapId = "";
 
 function switchDisplayTab(tab) {
     activeDisplayTab = tab;
@@ -147,6 +156,7 @@ function switchDisplayTab(tab) {
 
 let currentDisplayMaps = [];
 let currentDisplayPins = [];
+let currentActiveMapIndex = 0;
 
 function parseDisplayPins(raw) {
     if (!raw) return [];
@@ -189,29 +199,76 @@ function serializeDisplayPins(pins) {
     return pins.map(p => `${p.label || 'Marker'}: ${Math.round(p.x)}%, ${Math.round(p.y)}%`).join(" | ");
 }
 
+function selectDisplayMap(mapId) {
+    activeMapId = String(mapId);
+    socket.emit("set_active_map", {map_id: activeMapId, tab: "map"});
+    loadDisplayMap();
+}
+
 async function loadDisplayMap() {
     try {
         const res = await fetch("/api/campaign/world_maps");
         const data = await res.json();
         currentDisplayMaps = data.records || [];
+        const mainTitleEl = document.getElementById("display-map-main-title");
+        const switcherBar = document.getElementById("display-map-switcher-bar");
         const imgEl = document.getElementById("display-map-img");
         const emptyEl = document.getElementById("display-map-empty");
         const notesEl = document.getElementById("display-map-notes");
         const pinsContainer = document.getElementById("display-map-pins");
 
-        if (currentDisplayMaps.length > 0 && currentDisplayMaps[0].image_url) {
-            const mapData = currentDisplayMaps[0];
-            imgEl.src = mapData.image_url;
+        if (currentDisplayMaps.length === 0) {
+            if (mainTitleEl) mainTitleEl.textContent = "World Map";
+            if (switcherBar) switcherBar.style.display = "none";
+            imgEl.style.display = "none";
+            emptyEl.style.display = "block";
+            notesEl.textContent = "";
+            if (pinsContainer) pinsContainer.innerHTML = "";
+            return;
+        }
+
+        // Determine active map index
+        currentActiveMapIndex = 0;
+        if (activeMapId) {
+            const foundIdx = currentDisplayMaps.findIndex(m => String(m.id) === String(activeMapId) || String(m.name) === String(activeMapId));
+            if (foundIdx !== -1) currentActiveMapIndex = foundIdx;
+        }
+
+        const activeMap = currentDisplayMaps[currentActiveMapIndex];
+        if (mainTitleEl) {
+            mainTitleEl.textContent = activeMap.name || "World Map";
+        }
+
+        // Render Switcher buttons if multiple maps
+        if (switcherBar) {
+            if (currentDisplayMaps.length > 1) {
+                switcherBar.style.display = "flex";
+                switcherBar.innerHTML = currentDisplayMaps.map((m, idx) => {
+                    const isCurrent = idx === currentActiveMapIndex;
+                    const mapId = m.id || m.name || idx;
+                    const btnStyle = isCurrent
+                        ? "background:#d4af37; color:#111; border:1px solid #d4af37; font-weight:bold; padding:6px 14px; border-radius:6px; cursor:pointer; font-family:'Cinzel', serif; font-size:14px; box-shadow:0 0 10px rgba(212,175,55,0.4);"
+                        : "background:#222; color:#ccc; border:1px solid #555; padding:6px 14px; border-radius:6px; cursor:pointer; font-family:'Cinzel', serif; font-size:14px;";
+                    return `<button style="${btnStyle}" onclick="selectDisplayMap('${mapId}')">${m.name || `Map ${idx + 1}`}</button>`;
+                }).join("");
+            } else {
+                switcherBar.style.display = "none";
+            }
+        }
+
+        if (activeMap.image_url) {
+            imgEl.src = activeMap.image_url;
             imgEl.style.display = "block";
             emptyEl.style.display = "none";
-            notesEl.textContent = mapData.notes || "";
+            notesEl.textContent = activeMap.notes || "";
 
-            currentDisplayPins = parseDisplayPins(mapData.pins || "");
+            currentDisplayPins = parseDisplayPins(activeMap.pins || "");
             renderDisplayPins();
         } else {
             imgEl.style.display = "none";
             emptyEl.style.display = "block";
-            notesEl.textContent = "";
+            emptyEl.textContent = `Map '${activeMap.name}' has no image URL set.`;
+            notesEl.textContent = activeMap.notes || "";
             if (pinsContainer) pinsContainer.innerHTML = "";
         }
     } catch (e) {
@@ -291,9 +348,9 @@ function setupDisplayPinDrag(pinEl, pinIndex) {
         window.removeEventListener("pointermove", onPointerMove);
         window.removeEventListener("pointerup", onPointerUp);
 
-        // Auto-save updated pin coordinates back to database
-        if (currentDisplayMaps.length > 0) {
-            currentDisplayMaps[0].pins = serializeDisplayPins(currentDisplayPins);
+        // Auto-save updated pin coordinates back to database for current active map
+        if (currentDisplayMaps.length > currentActiveMapIndex) {
+            currentDisplayMaps[currentActiveMapIndex].pins = serializeDisplayPins(currentDisplayPins);
             try {
                 await fetch("/api/campaign/world_maps", {
                     method: "POST",
@@ -472,8 +529,14 @@ socket.on("update", (data) => {
                 <div id="disp-cond-container-${i}"></div>
 
                 <!-- Visual HP Bar Container -->
-                <div style="margin-top:15px; background:rgba(0,0,0,0.6); border-radius:6px; height:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.15);">
-                    <div id="disp-hp-bar-${i}" style="height:100%; width:100%; background:#2ecc71; transition:width 0.4s ease, background-color 0.4s ease;"></div>
+                <div style="margin-top:14px; text-align:left;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:12px; font-weight:bold; letter-spacing:0.5px;">
+                        <span style="color:#e74c3c; font-size:11px; text-transform:uppercase; letter-spacing:1px;">❤️ Health</span>
+                        <span id="disp-hp-text-${i}" style="color:#2ecc71; font-size:13px; font-variant-numeric:tabular-nums; font-family:'Inter', sans-serif;"></span>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.6); border-radius:6px; height:8px; overflow:hidden; border:1px solid rgba(255,255,255,0.15);">
+                        <div id="disp-hp-bar-${i}" style="height:100%; width:100%; background:#2ecc71; transition:width 0.4s ease, background-color 0.4s ease;"></div>
+                    </div>
                 </div>
 
                 <!-- Cooldown Progress Bar (Bottom) -->
@@ -549,8 +612,17 @@ socket.on("update", (data) => {
         if (hpPct <= 50) hpColor = "#f39c12";
         if (hpPct <= 25) hpColor = "#e74c3c";
 
+        const hpText = document.getElementById(`disp-hp-text-${i}`);
+        if (hpText) {
+            hpText.innerText = `${curHp} / ${maxHp} HP`;
+            hpText.style.color = hpColor;
+        }
+
         const hpBar = document.getElementById(`disp-hp-bar-${i}`);
         if (hpBar) {
+            hpBar.style.width = `${hpPct}%`;
+            hpBar.style.background = hpColor;
+        }
             hpBar.style.width = `${hpPct}%`;
             hpBar.style.background = hpColor;
         }

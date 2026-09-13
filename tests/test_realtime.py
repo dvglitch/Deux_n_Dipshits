@@ -49,18 +49,14 @@ class RealtimeSocketTests(unittest.TestCase):
         self.client.emit("lock_controls", {"locked": False})
         self.client.get_received()
 
-    def test_locked_state_prevents_client_toggle_and_adjust(self):
-        tm.control_state["locked"] = True
-        tm.timers[1]["running"] = False
+    def test_adjust_locked_state_prevents_client_adjust(self):
+        tm.control_state["adjust_locked"] = True
         initial_remaining = tm.timers[1]["remaining"]
-
-        self.client.emit("toggle", {"timer": 1})
-        self.assertFalse(tm.timers[1]["running"])
 
         self.client.emit("adjust_timer", {"timer": 1, "delta": 15})
         self.assertEqual(tm.timers[1]["remaining"], initial_remaining)
 
-        tm.control_state["locked"] = False
+        tm.control_state["adjust_locked"] = False
 
     def test_theme_and_sound_updates_broadcast_new_state(self):
         self.client.emit("set_theme", {"theme": "forest"})
@@ -90,6 +86,14 @@ class RealtimeSocketTests(unittest.TestCase):
         # Reset back to timers
         self.client.emit("set_display_tab", {"tab": "timers"})
         self.client.get_received()
+
+    def test_set_active_map_broadcasts_state(self):
+        self.client.emit("set_active_map", {"map_id": "map_2", "tab": "map"})
+        received = self.client.get_received()
+        map_events = [e for e in received if e["name"] == "control_update"]
+        self.assertTrue(len(map_events) > 0)
+        self.assertEqual(map_events[-1]["args"][0]["active_map_id"], "map_2")
+        self.assertEqual(map_events[-1]["args"][0]["display_tab"], "map")
 
     def test_set_timer_meta_updates_metadata(self):
         self.client.emit("set_timer_meta", {

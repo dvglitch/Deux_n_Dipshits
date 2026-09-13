@@ -1,65 +1,88 @@
 {
-    "max_timer_id": 3,
+    "max_timer_id": 5,
     "active_timer_ids": [
         1,
         2,
-        3
+        3,
+        4,
+        5
     ],
     "locked": false,
-    "adjust_locked": true,
+    "adjust_locked": false,
     "adjust_interval": 15,
     "DEFAULT_DURATION": 60,
     "cooldown_mode": true,
     "display_tab": "timers",
+    "active_map_id": "map_2",
     "timer_durations": {
         "1": 60,
         "2": 60,
-        "3": 60
+        "3": 60,
+        "4": 60,
+        "5": 60
     },
     "timer_cooldown_durations": {
         "1": 60,
         "2": 60,
-        "3": 60
+        "3": 60,
+        "4": 60,
+        "5": 60
     },
     "timer_names": {
-        "1": "Thorin",
-        "2": "Gandalf",
-        "3": "Goblin Raider"
+        "1": "Alder",
+        "2": "Cadere",
+        "3": "Thauma",
+        "4": "Ophelia",
+        "5": "Elias"
     },
     "timer_character_names": {
-        "1": "Thorin",
-        "2": "",
-        "3": ""
+        "1": "Angel",
+        "2": "Konner",
+        "3": "Hailey",
+        "4": "Alastor",
+        "5": "Drew"
     },
     "timer_show_on_remote": {
         "1": true,
         "2": true,
-        "3": false
+        "3": true,
+        "4": true,
+        "5": true
     },
     "timer_hp": {
-        "1": 18,
+        "1": 30,
         "2": 30,
-        "3": 30
+        "3": 30,
+        "4": 30,
+        "5": 30
     },
     "timer_max_hp": {
-        "1": 35,
+        "1": 30,
         "2": 30,
-        "3": 30
+        "3": 30,
+        "4": 30,
+        "5": 30
     },
     "timer_accent_colors": {
-        "1": "#3498db",
-        "2": "#4a90e2",
-        "3": "#e74c3c"
+        "1": "#5a27d3",
+        "2": "#b8b8b8",
+        "3": "#d4af37",
+        "4": "#4394fe",
+        "5": "#2d9a3f"
     },
     "timer_portraits": {
         "1": "",
         "2": "",
-        "3": ""
+        "3": "",
+        "4": "",
+        "5": ""
     },
     "timer_is_enemy": {
         "1": false,
         "2": false,
-        "3": true
+        "3": false,
+        "4": false,
+        "5": false
     },
     "timer_spell_slots": {
         "1": {
@@ -90,7 +113,48 @@
                 "max": 2
             }
         },
-        "3": {}
+        "3": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        },
+        "4": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        },
+        "5": {
+            "1": {
+                "current": 4,
+                "max": 4
+            },
+            "2": {
+                "current": 3,
+                "max": 3
+            },
+            "3": {
+                "current": 2,
+                "max": 2
+            }
+        }
     },
     "theme": "forest",
     "custom_bg_url": "",

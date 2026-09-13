@@ -208,6 +208,7 @@ function renderActiveCooldownView() {
     const resetBtn = document.getElementById("btn-reset-action");
     const toggleBtn = document.getElementById("btn-toggle-timer");
     const handBtn = document.getElementById("btn-raise-hand");
+    const heroPortrait = document.getElementById("player-hero-portrait");
 
     const accentColor = t.accent_color || "#d4af37";
     if (card) {
@@ -217,6 +218,16 @@ function renderActiveCooldownView() {
 
     if (nameEl) nameEl.textContent = t.name;
     if (charEl) charEl.textContent = t.character_name || "";
+
+    if (heroPortrait) {
+        if (t.portrait_url) {
+            heroPortrait.src = t.portrait_url;
+            heroPortrait.style.display = "block";
+            heroPortrait.style.borderColor = accentColor;
+        } else {
+            heroPortrait.style.display = "none";
+        }
+    }
 
     const timeStr = formatTime(t.remaining);
     if (timeEl) {
@@ -260,11 +271,28 @@ function renderActiveCooldownView() {
     if (handBtn) {
         handBtn.textContent = t.raised_hand ? "✋ Lower Hand" : "✋ Raise Hand";
         handBtn.style.background = t.raised_hand ? "rgba(212, 175, 55, 0.5)" : "rgba(218, 165, 32, 0.15)";
+        handBtn.style.opacity = locked ? "0.5" : "1";
+        handBtn.style.cursor = locked ? "not-allowed" : "pointer";
     }
 
     // Toggle button
     if (toggleBtn) {
         toggleBtn.textContent = t.running ? "⏸ Pause" : "▶ Start";
+        toggleBtn.style.opacity = locked ? "0.5" : "1";
+        toggleBtn.style.cursor = locked ? "not-allowed" : "pointer";
+    }
+
+    // Action button
+    if (resetBtn) {
+        if (locked) {
+            resetBtn.textContent = "🔒 Actions Locked by DM";
+            resetBtn.style.opacity = "0.5";
+            resetBtn.style.cursor = "not-allowed";
+        } else {
+            resetBtn.textContent = "⚡ Action Taken (Reset Cooldown)";
+            resetBtn.style.opacity = "1";
+            resetBtn.style.cursor = "pointer";
+        }
     }
 }
 
@@ -340,10 +368,106 @@ function renderResourcesView() {
             </div>
         `;
     }).join("");
+
+    // Character Customization Preview & Color
+    const portraitPreview = document.getElementById("resource-portrait-preview");
+    const portraitStatus = document.getElementById("player-portrait-status");
+    const removePortraitBtn = document.getElementById("btn-remove-portrait");
+    const colorPicker = document.getElementById("player-accent-color-picker");
+
+    const accentColor = t.accent_color || "#d4af37";
+    if (portraitPreview) {
+        if (t.portrait_url) {
+            portraitPreview.src = t.portrait_url;
+            portraitPreview.style.display = "block";
+            portraitPreview.style.borderColor = accentColor;
+        } else {
+            portraitPreview.style.display = "none";
+        }
+    }
+    if (portraitStatus) {
+        portraitStatus.textContent = t.portrait_url ? "✓ Custom portrait active" : "No custom portrait attached";
+        portraitStatus.style.color = t.portrait_url ? "#2ecc71" : "#888";
+    }
+    if (removePortraitBtn) {
+        removePortraitBtn.style.display = t.portrait_url ? "block" : "none";
+    }
+    if (colorPicker && document.activeElement !== colorPicker) {
+        colorPicker.value = accentColor;
+    }
+}
+
+async function handlePlayerPortraitUpload(input) {
+    if (!selectedTimerId || !input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append("player_id", `player_${selectedTimerId}`);
+    formData.append("file", file);
+
+    const statusEl = document.getElementById("player-portrait-status");
+    if (statusEl) {
+        statusEl.textContent = "Uploading portrait...";
+        statusEl.style.color = "#d4af37";
+    }
+
+    try {
+        const res = await fetch("/api/campaign/upload_portrait", {
+            method: "POST",
+            body: formData
+        });
+        const result = await res.json();
+        if (res.ok && result.portrait_url) {
+            if (timers[selectedTimerId]) {
+                timers[selectedTimerId].portrait_url = result.portrait_url;
+            }
+            socket.emit("set_timer_meta", {
+                timer: selectedTimerId,
+                portrait_url: result.portrait_url
+            });
+            renderActiveCooldownView();
+            renderResourcesView();
+        } else {
+            throw new Error(result.error || "Upload failed");
+        }
+    } catch (err) {
+        if (statusEl) {
+            statusEl.textContent = "Upload error: " + err.message;
+            statusEl.style.color = "#e74c3c";
+        }
+    }
+}
+
+function removePlayerPortrait() {
+    if (!selectedTimerId) return;
+    if (timers[selectedTimerId]) {
+        timers[selectedTimerId].portrait_url = "";
+    }
+    socket.emit("set_timer_meta", {
+        timer: selectedTimerId,
+        portrait_url: ""
+    });
+    renderActiveCooldownView();
+    renderResourcesView();
+}
+
+function onPlayerAccentColorChange(color) {
+    if (!selectedTimerId || !color) return;
+    if (timers[selectedTimerId]) {
+        timers[selectedTimerId].accent_color = color;
+    }
+    const colorPicker = document.getElementById("player-accent-color-picker");
+    if (colorPicker) colorPicker.value = color;
+
+    socket.emit("set_timer_meta", {
+        timer: selectedTimerId,
+        accent_color: color
+    });
+    renderActiveCooldownView();
+    renderResourcesView();
 }
 
 function changePlayerHp(delta) {
-    if (!selectedTimerId || !timers[selectedTimerId]) return;
+    if (!selectedTimerId || !timers[selectedTimerId] || locked) return;
     const t = timers[selectedTimerId];
     const curHp = t.current_hp !== undefined ? t.current_hp : 30;
     const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
@@ -352,7 +476,7 @@ function changePlayerHp(delta) {
 }
 
 function toggleSingleSlot(level, index) {
-    if (!selectedTimerId || !timers[selectedTimerId]) return;
+    if (!selectedTimerId || !timers[selectedTimerId] || locked) return;
     const t = timers[selectedTimerId];
     const slots = t.spell_slots || {};
     const info = slots[level] || {current: 4, max: 4};
@@ -368,8 +492,56 @@ function toggleSingleSlot(level, index) {
 }
 
 function restoreAllPlayerSlots() {
-    if (!selectedTimerId) return;
+    if (!selectedTimerId || locked) return;
     socket.emit("restore_all_slots", {timer: selectedTimerId});
+}
+
+function isAssignedToCurrentPlayer(assignedTo, playerName, charName) {
+    if (!assignedTo) return true;
+    let list = [];
+    if (Array.isArray(assignedTo)) {
+        list = assignedTo;
+    } else if (typeof assignedTo === 'string') {
+        const trimmed = assignedTo.trim();
+        if (!trimmed || trimmed.toLowerCase() === 'all' || trimmed.toLowerCase() === 'all players') return true;
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const arr = JSON.parse(trimmed);
+                list = Array.isArray(arr) ? arr : [trimmed];
+            } catch(e) {
+                list = trimmed.split(',');
+            }
+        } else {
+            list = trimmed.split(',');
+        }
+    }
+    list = list.map(s => String(s).trim().toLowerCase()).filter(Boolean);
+    if (list.length === 0 || list.includes('all') || list.includes('all players')) return true;
+
+    // If player has not selected a character yet, show all spells
+    if (!playerName && !charName) return true;
+
+    return (playerName && list.includes(playerName)) || (charName && list.includes(charName));
+}
+
+function formatAssignedToLabel(assignedTo) {
+    if (!assignedTo) return '';
+    if (Array.isArray(assignedTo)) {
+        if (assignedTo.length === 0) return '';
+        return assignedTo.join(', ');
+    }
+    if (typeof assignedTo === 'string') {
+        const trimmed = assignedTo.trim();
+        if (!trimmed || trimmed.toLowerCase() === 'all' || trimmed.toLowerCase() === 'all players') return '';
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const arr = JSON.parse(trimmed);
+                return Array.isArray(arr) ? arr.join(', ') : trimmed;
+            } catch(e) {}
+        }
+        return trimmed;
+    }
+    return '';
 }
 
 // 5. Spellbook View & Detail Modal
@@ -399,14 +571,10 @@ function filterSpellList(query) {
     }
 
     const filtered = allSpells.filter(s => {
-        // 1. Visibility check: if spell is assigned to a specific player, only show to them or if no player is selected
-        const assignedTo = (s.assigned_to || "").trim().toLowerCase();
-        if (assignedTo && assignedTo !== "all" && (selectedPlayerName || selectedCharName)) {
-            const matchesPlayer = (selectedPlayerName && assignedTo === selectedPlayerName);
-            const matchesChar = (selectedCharName && assignedTo === selectedCharName);
-            if (!matchesPlayer && !matchesChar) {
-                return false;
-            }
+        // 1. Visibility check: check if assigned to this player or to all
+        const assignedVal = s.assigned_to || s.assigned_players;
+        if (!isAssignedToCurrentPlayer(assignedVal, selectedPlayerName, selectedCharName)) {
+            return false;
         }
 
         // 2. Search query check
@@ -423,11 +591,23 @@ function filterSpellList(query) {
         const idx = allSpells.indexOf(s);
         const levelLabel = s.level === 0 ? "Cantrip" : `Lvl ${s.level}`;
         const concTag = s.concentration ? `<span style="font-size:10px; background:#f39c12; color:black; padding:2px 5px; border-radius:3px; margin-left:6px; font-weight:bold;">CONC</span>` : "";
-        const assignedTag = s.assigned_to ? `<span style="font-size:10px; background:rgba(212,175,55,0.2); color:#d4af37; border:1px solid #d4af37; padding:2px 5px; border-radius:3px; margin-left:6px;">${s.assigned_to}</span>` : "";
+        const labelText = formatAssignedToLabel(s.assigned_to || s.assigned_players);
+        const assignedTag = labelText ? `<span style="font-size:10px; background:rgba(212,175,55,0.2); color:#d4af37; border:1px solid #d4af37; padding:2px 5px; border-radius:3px; margin-left:6px;">${labelText}</span>` : "";
+        
+        let actionBadge = "";
+        const actType = s.action_type || (s.resets_timer === false ? 'Bonus Action' : 'Action');
+        if (actType === 'Bonus Action') {
+            actionBadge = `<span style="font-size:10px; background:#8e44ad; color:white; padding:2px 5px; border-radius:3px; margin-left:6px; font-weight:bold;">BONUS</span>`;
+        } else if (actType === 'Reaction') {
+            actionBadge = `<span style="font-size:10px; background:#2980b9; color:white; padding:2px 5px; border-radius:3px; margin-left:6px; font-weight:bold;">REACTION</span>`;
+        } else if (actType === 'Free') {
+            actionBadge = `<span style="font-size:10px; background:#27ae60; color:white; padding:2px 5px; border-radius:3px; margin-left:6px; font-weight:bold;">FREE</span>`;
+        }
+
         return `
             <div class="timer-card" style="margin:0; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;" onclick="openSpellDetailModal(${idx})">
                 <div>
-                    <div style="font-weight:bold; font-size:16px; color:#f5f5f5;">${s.name} ${concTag} ${assignedTag}</div>
+                    <div style="font-weight:bold; font-size:16px; color:#f5f5f5;">${s.name} ${concTag} ${actionBadge} ${assignedTag}</div>
                     <div style="font-size:12px; color:#aaa; margin-top:2px;">${levelLabel} • ${s.duration || '1 action'}</div>
                 </div>
                 <div style="font-size:18px; color:#d4af37;">❯</div>
@@ -448,12 +628,25 @@ function openSpellDetailModal(spellIndex) {
     document.getElementById("modal-spell-concentration").textContent = spell.concentration ? "Yes (Requires Concentration)" : "No";
     document.getElementById("modal-spell-desc").textContent = spell.description || "No description provided.";
 
+    const actionType = spell.action_type || (spell.resets_timer === false ? 'Bonus Action' : 'Action');
+    const resetsTimer = (spell.resets_timer !== false && actionType === 'Action');
+
+    const actionEl = document.getElementById("modal-spell-action");
+    if (actionEl) actionEl.textContent = actionType;
+
+    const cdEffectEl = document.getElementById("modal-spell-cooldown-effect");
+    if (cdEffectEl) {
+        cdEffectEl.textContent = resetsTimer ? "⚡ Resets Cooldown" : "✨ Keeps Cooldown";
+        cdEffectEl.style.color = resetsTimer ? "#2ecc71" : "#bb86fc";
+    }
+
     const assignedContainer = document.getElementById("modal-spell-assigned-container");
     const assignedSpan = document.getElementById("modal-spell-assigned");
+    const labelText = formatAssignedToLabel(spell.assigned_to || spell.assigned_players);
     if (assignedContainer && assignedSpan) {
-        if (spell.assigned_to) {
+        if (labelText) {
             assignedContainer.style.display = "block";
-            assignedSpan.textContent = spell.assigned_to;
+            assignedSpan.textContent = labelText;
         } else {
             assignedContainer.style.display = "none";
         }
@@ -461,10 +654,29 @@ function openSpellDetailModal(spellIndex) {
 
     const castBtn = document.getElementById("modal-cast-btn");
     if (castBtn) {
-        if (spell.level === 0) {
-            castBtn.textContent = "Cast Cantrip (Free)";
+        if (locked) {
+            castBtn.textContent = "🔒 Actions Locked by DM";
+            castBtn.style.opacity = "0.5";
+            castBtn.style.cursor = "not-allowed";
+            castBtn.style.background = "#555";
+        } else if (resetsTimer) {
+            castBtn.style.opacity = "1";
+            castBtn.style.cursor = "pointer";
+            castBtn.style.background = "#1e7f3f";
+            if (spell.level === 0) {
+                castBtn.textContent = "Cast Cantrip & Reset Cooldown";
+            } else {
+                castBtn.textContent = `Expend Lvl ${spell.level} Slot & Reset Cooldown`;
+            }
         } else {
-            castBtn.textContent = `Expend Lvl ${spell.level} Slot & Cast`;
+            castBtn.style.opacity = "1";
+            castBtn.style.cursor = "pointer";
+            castBtn.style.background = actionType === 'Reaction' ? '#2980b9' : '#8e44ad';
+            if (spell.level === 0) {
+                castBtn.textContent = `Cast Cantrip (${actionType} - Keeps Cooldown)`;
+            } else {
+                castBtn.textContent = `Expend Lvl ${spell.level} Slot & Cast (${actionType})`;
+            }
         }
     }
 
@@ -478,8 +690,10 @@ function closeSpellDetailModal() {
 }
 
 function castSpellFromModal() {
-    if (!currentViewingSpell) return;
+    if (!currentViewingSpell || locked) return;
     const lvl = currentViewingSpell.level;
+    const actionType = currentViewingSpell.action_type || (currentViewingSpell.resets_timer === false ? 'Bonus Action' : 'Action');
+    const resetsTimer = (currentViewingSpell.resets_timer !== false && actionType === 'Action');
 
     // Expend slot if level > 0 and player timer is selected
     if (lvl > 0 && selectedTimerId) {
@@ -490,8 +704,11 @@ function castSpellFromModal() {
         });
     }
 
-    // Reset action cooldown immediately
-    playerResetAction();
+    // Reset cooldown only if configured to reset cooldown (Action)
+    if (resetsTimer) {
+        playerResetAction();
+    }
+
     closeSpellDetailModal();
     switchRemoteView("cooldown");
 }
