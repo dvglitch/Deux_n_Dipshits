@@ -79,3 +79,32 @@ def delete_collection(collection: str):
                 repo.close()
             except Exception:
                 pass
+
+
+@campaign_bp.post("/upload_portrait")
+def upload_portrait():
+    """Upload a character portrait image for a player."""
+    from ..services.portrait_service import PortraitStorageService
+
+    player_id = request.form.get("player_id", "").strip()
+    if not player_id:
+        return jsonify({"error": "player_id is required"}), 400
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    if not file or not file.filename:
+        return jsonify({"error": "Empty or invalid file"}), 400
+
+    try:
+        service = PortraitStorageService()
+        file_bytes = file.read()
+        portrait_url = service.save_portrait(player_id, file.filename, file_bytes)
+        return jsonify({"player_id": player_id, "portrait_url": portrait_url, "status": "uploaded"})
+    except ValueError as val_err:
+        return jsonify({"error": str(val_err)}), 400
+    except Exception as err:
+        logger.exception("Failed to upload portrait for %s: %s", player_id, err)
+        return jsonify({"error": "Upload failed", "message": str(err)}), 500
+
