@@ -35,9 +35,83 @@ control_state = {
     "cooldown_mode": True
 }
 
+def sync_with_campaign_profiles(profiles=None, clear_enemies=False):
+    """Sync active timers with saved campaign player profiles (from DB or provided list)."""
+    global timers, active_timer_ids, max_timer_id, finish_order
+    if profiles is None:
+        try:
+            from .database.factory import create_campaign_repository
+            repo = create_campaign_repository()
+            try:
+                profiles = repo.load_collection("player_profiles")
+            finally:
+                repo.close()
+        except Exception:
+            profiles = []
+
+    if profiles:
+        current_enemies = {}
+        if not clear_enemies:
+            current_enemies = {
+                tid: data for tid, data in timers.items() if data.get("is_enemy", False)
+            }
+
+        new_timers = {}
+        new_active_ids = []
+        for idx, p in enumerate(profiles, start=1):
+            new_active_ids.append(idx)
+            max_hp = int(p.get("max_hp", 30))
+            cd = int(p.get("default_cooldown", 60))
+            
+            existing = timers.get(idx, {})
+            cur_hp = max_hp if clear_enemies else existing.get("current_hp", max_hp)
+            cur_slots = None if clear_enemies else existing.get("spell_slots")
+
+            new_timers[idx] = {
+                "remaining": cd,
+                "running": False,
+                "last_update": time.time(),
+                "name": p.get("name") or f"Player {idx}",
+                "character_name": p.get("character_name", ""),
+                "finished": False,
+                "raised_hand": False,
+                "condition": "",
+                "duration": cd,
+                "cooldown_duration": cd,
+                "show_on_remote": True,
+                "current_hp": cur_hp,
+                "max_hp": max_hp,
+                "accent_color": p.get("accent_color", "#d4af37"),
+                "portrait_url": p.get("portrait_url", ""),
+                "is_enemy": False,
+                "spell_slots": cur_slots or p.get("spell_slots", {
+                    "1": {"current": 4, "max": 4},
+                    "2": {"current": 3, "max": 3},
+                    "3": {"current": 2, "max": 2}
+                }),
+            }
+
+        if current_enemies:
+            next_id = len(new_active_ids) + 1
+            for _, e_data in current_enemies.items():
+                new_active_ids.append(next_id)
+                new_timers[next_id] = e_data
+                next_id += 1
+
+        timers = new_timers
+        active_timer_ids = new_active_ids
+        max_timer_id = max(active_timer_ids) if active_timer_ids else 0
+        finish_order = [fid for fid in finish_order if fid in new_timers]
+        save_current_state()
+        return True
+    return False
+
 def init_timers():
-    """Initialize timers based on active_timer_ids setting"""
+    """Initialize timers based on active_timer_ids setting or campaign profiles"""
     global timers, finish_order
+    if sync_with_campaign_profiles(clear_enemies=True):
+        return
+
     settings = load_settings()
     timer_vis = settings.get("timer_show_on_remote", {})
     timer_durs = settings.get("timer_durations", {})

@@ -17,6 +17,11 @@ def register_socket_events(socketio):
         state = CombatService.get_control_state()
         socketio.emit("control_update", state, to=request.sid)
 
+    @socketio.on("start_session")
+    def handle_start_session(data=None):
+        CombatService.start_session()
+        socketio.emit("control_update", CombatService.get_control_state())
+
     @socketio.on("toggle_hand")
     def handle_toggle_hand(data):
         if not isinstance(data, dict) or "timer" not in data:

@@ -17,6 +17,20 @@ class CombatService:
     """Service providing safe, validated state transitions for combat timers."""
 
     @staticmethod
+    def start_session() -> None:
+        """Start/reset a fresh session: sync stored campaign profiles, reset HP and slots to full, clear enemies."""
+        from ..database.factory import create_campaign_repository
+        repo = create_campaign_repository()
+        try:
+            profiles = repo.load_collection("player_profiles")
+        finally:
+            repo.close()
+
+        tm.sync_with_campaign_profiles(profiles, clear_enemies=True)
+        tm.update_control_state("display_tab", "timers")
+        tm.reset_all_timers()
+
+    @staticmethod
     def toggle_hand(timer_id_raw: Any) -> bool:
         timer_id = _parse_int(timer_id_raw)
         if timer_id is None or tm.control_state.get("locked", False):

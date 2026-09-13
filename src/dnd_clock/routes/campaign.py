@@ -48,6 +48,12 @@ def save_collection(collection: str):
         repo = create_campaign_repository()
         repo.save_collection(collection, data["records"])
         saved_records = repo.load_collection(collection)
+        if collection == "player_profiles":
+            try:
+                from .. import timers as tm
+                tm.sync_with_campaign_profiles(saved_records, clear_enemies=False)
+            except Exception as sync_err:
+                logger.warning("Could not sync timers after saving player profiles: %s", sync_err)
         return jsonify({"collection": collection, "records": saved_records, "status": "saved"})
     except (RepositoryError, Exception) as err:
         logger.exception("Failed to save collection %s: %s", collection, err)

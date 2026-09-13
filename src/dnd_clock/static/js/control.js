@@ -383,18 +383,9 @@ function resetAll() {
 }
 
 function confirmResetSession() {
-    if (confirm("⚡ Start a fresh session?\n\nThis will:\n- Restore full HP and spell slots for all active players\n- Reset all combat cooldowns\n- Clear active enemies\n- Switch the TV display to Timers")) {
-        socket.emit("reset_all");
-        socket.emit("restore_all_slots");
-        socket.emit("set_display_tab", {tab: "timers"});
-        // Restore all player HP to max
-        document.querySelectorAll("[id^='timer-']").forEach(card => {
-            const id = Number(card.id.replace("timer-", ""));
-            if (id) {
-                socket.emit("set_hp", {timer: id, current_hp: 999});
-            }
-        });
-        showMaintStatus ? showMaintStatus("Session initialized: HP and spell slots restored.") : null;
+    if (confirm("⚡ Start a fresh session?\n\nThis will:\n- Sync active timers to saved Party Profiles from the database\n- Restore full HP and spell slots for all party members\n- Reset all combat cooldowns\n- Clear temporary enemies\n- Switch the TV display to Timers")) {
+        socket.emit("start_session");
+        showMaintStatus ? showMaintStatus("Session initialized: Timers synchronized with saved party profiles.") : null;
     }
 }
 
@@ -751,9 +742,63 @@ async function savePlayersCollection() {
     }
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function getPlayerOptionsHtml(selectedVal = '') {
+    const playerRows = Array.from(document.querySelectorAll('#maint-players-tbody tr'));
+    const players = [];
+    playerRows.forEach(r => {
+        const name = (r.querySelector('.p-name')?.value || '').trim();
+        const charName = (r.querySelector('.p-char')?.value || '').trim();
+        if (name || charName) {
+            players.push({
+                name,
+                charName,
+                label: charName ? `${charName} (${name})` : name,
+                val: charName || name
+            });
+        }
+    });
+
+    let optionsHtml = `<option value="">All Players</option>`;
+    let found = !selectedVal;
+    players.forEach(p => {
+        const isSel = selectedVal && (
+            selectedVal.toLowerCase() === p.val.toLowerCase() ||
+            selectedVal.toLowerCase() === p.name.toLowerCase() ||
+            selectedVal.toLowerCase() === p.charName.toLowerCase()
+        );
+        if (isSel) found = true;
+        optionsHtml += `<option value="${escapeHtml(p.val)}" ${isSel ? 'selected' : ''}>${escapeHtml(p.label)}</option>`;
+    });
+
+    if (selectedVal && !found) {
+        optionsHtml += `<option value="${escapeHtml(selectedVal)}" selected>${escapeHtml(selectedVal)}</option>`;
+    }
+    return optionsHtml;
+}
+
 // --- Spells Collection ---
 async function loadSpells() {
     try {
+        // Pre-fetch player profiles if players table is empty to populate assigned dropdown
+        const pRows = document.querySelectorAll('#maint-players-tbody tr');
+        if (pRows.length === 0) {
+            try {
+                const pRes = await fetch('/api/campaign/player_profiles');
+                const pData = await pRes.json();
+                const pRecords = pData.records || [];
+                const pBody = document.getElementById('maint-players-tbody');
+                if (pBody && pRecords.length > 0) {
+                    pBody.innerHTML = '';
+                    pRecords.forEach(r => addPlayerRow(r));
+                }
+            } catch (pe) {}
+        }
+
         const res = await fetch('/api/campaign/spells');
         const data = await res.json();
         const tbody = document.getElementById('maint-spells-tbody');
@@ -774,12 +819,18 @@ function addSpellRow(data = {}) {
     const tbody = document.getElementById('maint-spells-tbody');
     if (!tbody) return;
     const tr = document.createElement('tr');
+    const assignedVal = data.assigned_to || '';
     tr.innerHTML = `
-        <td><input type="text" class="s-name" value="${data.name || ''}" placeholder="Spell Name" style="width:100%;"></td>
+        <td><input type="text" class="s-name" value="${escapeHtml(data.name || '')}" placeholder="Spell Name" style="width:100%;"></td>
         <td><input type="number" class="s-level" value="${data.level !== undefined ? data.level : 1}" min="0" max="9" style="width:60px;"></td>
-        <td><input type="text" class="s-duration" value="${data.duration || '1 action'}" style="width:100px;"></td>
-        <td><input type="checkbox" class="s-conc" ${data.concentration ? 'checked' : ''}></td>
-        <td><input type="text" class="s-desc" value="${data.description || ''}" placeholder="Description / effects" style="width:100%;"></td>
+        <td><input type="text" class="s-duration" value="${escapeHtml(data.duration || '1 action')}" style="width:100px;"></td>
+        <td style="text-align:center;"><input type="checkbox" class="s-conc" ${data.concentration ? 'checked' : ''}></td>
+        <td>
+            <select class="s-assigned" style="width:140px; background:#222; color:white; border:1px solid #555; border-radius:4px; padding:4px;">
+                ${getPlayerOptionsHtml(assignedVal)}
+            </select>
+        </td>
+        <td><input type="text" class="s-desc" value="${escapeHtml(data.description || '')}" placeholder="Description / effects" style="width:100%;"></td>
         <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
     `;
     tbody.appendChild(tr);
@@ -793,6 +844,7 @@ async function saveSpellsCollection() {
         level: parseInt(r.querySelector('.s-level')?.value, 10) || 0,
         duration: r.querySelector('.s-duration')?.value || '',
         concentration: Boolean(r.querySelector('.s-conc')?.checked),
+        assigned_to: r.querySelector('.s-assigned')?.value || '',
         description: r.querySelector('.s-desc')?.value || ''
     })).filter(r => r.name);
 
