@@ -377,7 +377,25 @@ function toggleAll() {
 }
 
 function resetAll() {
-    socket.emit("reset_all");
+    if (confirm("Reset all combat cooldowns to their default values?")) {
+        socket.emit("reset_all");
+    }
+}
+
+function confirmResetSession() {
+    if (confirm("⚡ Start a fresh session?\n\nThis will:\n- Restore full HP and spell slots for all active players\n- Reset all combat cooldowns\n- Clear active enemies\n- Switch the TV display to Timers")) {
+        socket.emit("reset_all");
+        socket.emit("restore_all_slots");
+        socket.emit("set_display_tab", {tab: "timers"});
+        // Restore all player HP to max
+        document.querySelectorAll("[id^='timer-']").forEach(card => {
+            const id = Number(card.id.replace("timer-", ""));
+            if (id) {
+                socket.emit("set_hp", {timer: id, current_hp: 999});
+            }
+        });
+        showMaintStatus ? showMaintStatus("Session initialized: HP and spell slots restored.") : null;
+    }
 }
 
 function setAll() {

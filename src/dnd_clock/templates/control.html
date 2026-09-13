@@ -16,7 +16,10 @@
 
             <!-- VIEW 1: SESSION CONTROL -->
             <div id="view-session-control">
-                <!-- Navigation -->
+                <!-- Navigation & Quick Session Actions -->
+                <div style="position:fixed; top:20px; right:70px; z-index:1000; display:flex; gap:10px;">
+                    <button onclick="confirmResetSession()" style="background:#8b2525; padding:6px 14px; font-size:13px; border-radius:6px; border:1px solid #c82333; cursor:pointer;" title="Start a fresh session: restores player HP and spell slots, clears active enemies and timers">⚡ Start New Session</button>
+                </div>
                 <button id="nav-left" class="nav-btn" onclick="showSlide('prev')" style="position:fixed; top:50%; left:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:0 10px 10px 0; transition: background 0.2s;">&#10094;</button>
                 <button id="nav-right" class="nav-btn" onclick="showSlide('next')" style="position:fixed; top:50%; right:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:10px 0 0 10px; transition: background 0.2s;">&#10095;</button>
 
