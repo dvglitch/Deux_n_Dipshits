@@ -88,11 +88,78 @@ function playFeedback(type) {
     AudioController.play(type);
 }
 
-function toggleMute() {
-    muteFeedback = !muteFeedback;
-    localStorage.setItem("mute_dm_feedback", muteFeedback);
-    const btn = document.getElementById("mute-btn");
-    if (btn) btn.innerText = muteFeedback ? "🔇 Muted" : "🔔 Alerts On";
+let dmFilter = "all";
+
+function setDmFilter(filter) {
+    dmFilter = filter;
+    document.querySelectorAll('.dm-filter-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById(`filter-${filter}`);
+    if (activeBtn) activeBtn.classList.add('active');
+    renderTimers();
+}
+
+function changeDmDisplayTab() {
+    const select = document.getElementById("dmDisplayTabSelect");
+    if (!select) return;
+    const tab = select.value;
+    socket.emit("set_display_tab", {tab});
+}
+
+function toggleDmLock() {
+    const toggle = document.getElementById("dmLockToggle");
+    locked = toggle.checked;
+    socket.emit("lock_controls", {locked});
+}
+
+function confirmResetAll() {
+    if (confirm("Reset all active combat timers to their default cooldowns?")) {
+        socket.emit("reset_all");
+    }
+}
+
+function toggleAll() {
+    socket.emit("toggle_all");
+}
+
+function openAddEnemyModal() {
+    const modal = document.getElementById("add-enemy-modal");
+    if (modal) modal.style.display = "flex";
+}
+
+function closeAddEnemyModal() {
+    const modal = document.getElementById("add-enemy-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function submitAddEnemy() {
+    const nameInput = document.getElementById("new-enemy-name");
+    const name = nameInput ? nameInput.value.trim() : "";
+    if (!name) return;
+    socket.emit("add_timer", {is_enemy: true, name: name});
+    if (nameInput) nameInput.value = "";
+    closeAddEnemyModal();
+}
+
+function adjustHp(e, i, delta) {
+    e.stopPropagation();
+    const t = timers[i];
+    if (!t) return;
+    const cur = t.current_hp !== undefined ? t.current_hp : 30;
+    const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
+    const newHp = Math.max(0, Math.min(maxHp, cur + delta));
+    socket.emit("set_hp", {timer: i, current_hp: newHp, max_hp: maxHp});
+}
+
+function updateCondition(e, i, val) {
+    e.stopPropagation();
+    socket.emit("set_condition", {timer: i, condition: val});
+}
+
+function deleteCombatant(e, i) {
+    e.stopPropagation();
+    if (confirm(`Remove combatant #${i}?`)) {
+        socket.emit("delete_timer", {timer: i});
+    }
 }
 
 function formatTime(s) {
@@ -161,6 +228,7 @@ function toggleExpand(i) {
 
 function renderTimers() {
     const container = document.getElementById("timers");
+    if (!container) return;
 
     // Feedback Toggle Header
     let settingsBar = document.getElementById("feedback-settings");
@@ -178,10 +246,16 @@ function renderTimers() {
         AudioController.updateUnlockUI();
     }
 
-    let ids = Object.keys(timers)
-        .map(Number)
-        .sort((a, b) => a - b)
-        .filter(id => timers[id] && timers[id].show_on_remote === false); // <=== CHANGED THIS LINE FOR DM EXCLUSIVE
+    let allIds = Object.keys(timers).map(Number).sort((a, b) => a - b);
+    
+    // Filter by selection
+    let ids = allIds.filter(id => {
+        const t = timers[id];
+        if (!t) return false;
+        if (dmFilter === "players") return !t.is_enemy && t.show_on_remote !== false;
+        if (dmFilter === "enemies") return t.is_enemy || t.show_on_remote === false;
+        return true;
+    });
 
     // Remove timers that are no longer in the list or hidden due to focus mode
     Array.from(container.children).forEach(child => {
@@ -196,8 +270,6 @@ function renderTimers() {
         if (!t) continue;
 
         const isExp = (expanded === i);
-        
-        // Focus Mode: Hide all other timers if one is expanded
         if (expanded !== null && !isExp) continue;
 
         let cardClass = "timer-card";
@@ -205,6 +277,9 @@ function renderTimers() {
         if (t.remaining <= 0) cardClass += " finished";
         
         const timeStr = formatTime(t.remaining);
+        const curHp = t.current_hp !== undefined ? t.current_hp : 30;
+        const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
+        const isEnemy = Boolean(t.is_enemy || t.show_on_remote === false);
 
         let card = document.getElementById(`timer-card-${i}`);
         let currentState = card ? card.getAttribute("data-expanded") === "true" : null;
@@ -216,33 +291,67 @@ function renderTimers() {
             card.setAttribute("data-expanded", isExp);
             container.appendChild(card);
 
+            const badge = isEnemy ? `<span style="background:#e74c3c; color:white; font-size:10px; padding:2px 6px; border-radius:3px; font-weight:bold; margin-left:6px;">ENEMY</span>` : `<span style="background:#2ecc71; color:black; font-size:10px; padding:2px 6px; border-radius:3px; font-weight:bold; margin-left:6px;">PLAYER</span>`;
+
             let html = `
                 <div class="timer-header" onclick="toggleExpand(${i})">
-                    <div class="name-disp" style="font-size:22px; text-shadow:1px 1px 2px black;">${t.name}</div>
-                    <div class="time-disp" style="font-size:26px; font-variant-numeric: tabular-nums; text-shadow:1px 1px 2px black;"></div>
+                    <div style="display:flex; align-items:center;">
+                        <div class="name-disp" style="font-size:20px; font-weight:bold; font-family:'Cinzel', serif;">${t.name}</div>
+                        ${badge}
+                    </div>
+                    <div class="time-disp" style="font-size:24px; font-weight:bold; font-variant-numeric: tabular-nums;"></div>
+                </div>
+                
+                <!-- Quick HP Bar inline -->
+                <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                    <div style="font-size:12px; font-weight:bold; min-width:48px; text-align:left;">HP: ${curHp}/${maxHp}</div>
+                    <div style="flex:1; background:rgba(0,0,0,0.5); border-radius:4px; height:6px; overflow:hidden;">
+                        <div class="hp-fill-bar" style="height:100%; width:${Math.min(100, (curHp/maxHp)*100)}%; background:${(curHp/maxHp) <= 0.25 ? '#e74c3c' : ((curHp/maxHp) <= 0.5 ? '#f39c12' : '#2ecc71')};"></div>
+                    </div>
                 </div>
             `;
 
             if (isExp) {
                 html += `
-                    <div class="timer-body">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:16px;">
-                            <div class="status-disp" style="opacity:0.8; text-transform:uppercase;"></div>
-                            <div class="pos-disp" style="font-weight:bold;"></div>
+                    <div class="timer-body" style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:12px; font-size:14px;">
+                            <div class="status-disp" style="opacity:0.8; text-transform:uppercase; font-weight:bold;"></div>
+                            <div class="pos-disp" style="font-weight:bold; color:gold;"></div>
                         </div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
-                            <button class="toggle-btn" onclick="toggle(event, ${i})" style="margin:0; width:100%; border:1px solid rgba(255,255,255,0.2); box-sizing:border-box;"></button>
-                            <button onclick="reset(event, ${i})" style="margin:0; width:100%; border:1px solid rgba(255,255,255,0.2); box-sizing:border-box;">Reset</button>
+
+                        <!-- HP Adjust Controls -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:8px 10px; margin-bottom:12px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span style="font-size:13px; font-weight:bold;">Hit Points</span>
+                                <span style="font-size:13px; color:#2ecc71; font-weight:bold;">${curHp} / ${maxHp} HP</span>
+                            </div>
+                            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;">
+                                <button onclick="adjustHp(event, ${i}, -5)" style="padding:6px; font-size:12px; background:#a83232;">-5</button>
+                                <button onclick="adjustHp(event, ${i}, -1)" style="padding:6px; font-size:12px; background:#884444;">-1</button>
+                                <button onclick="adjustHp(event, ${i}, 1)" style="padding:6px; font-size:12px; background:#2e7d32;">+1</button>
+                                <button onclick="adjustHp(event, ${i}, 5)" style="padding:6px; font-size:12px; background:#1b5e20;">+5</button>
+                            </div>
                         </div>
-                        <div style="display:flex; width:100%; margin-bottom:10px;">
-                            <button class="hand-btn" onclick="toggleHand(event, ${i})" style="flex:1; margin:0; border:1px solid rgba(255,215,0,0.5); background:rgba(218,165,32,0.2); color:gold; box-sizing:border-box;"></button>
+
+                        <!-- Condition -->
+                        <div style="margin-bottom:12px;">
+                            <input type="text" value="${t.condition || ''}" placeholder="Condition (e.g. Stunned, Poisoned)" onchange="updateCondition(event, ${i}, this.value)" style="width:100%; font-size:13px; text-align:left; box-sizing:border-box;">
                         </div>
-                        <div class="adj-container" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
-                            <button id="adj-up-btn-${i}" class="adj-btn" style="margin:0; width:100%; background:#444; box-sizing:border-box;">+30s</button>
-                            <button id="adj-down-btn-${i}" class="adj-btn" style="margin:0; width:100%; background:#444; box-sizing:border-box;">-30s</button>
+
+                        <!-- Timer Controls -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+                            <button class="toggle-btn" onclick="toggle(event, ${i})" style="margin:0; width:100%;"></button>
+                            <button onclick="reset(event, ${i})" style="margin:0; width:100%; background:#444;">Reset</button>
                         </div>
-                        <div style="display:flex; width:100%;">
-                            <button onclick="toggleExpand(${i})" style="flex:1; margin:0; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.4); box-sizing:border-box;">⬇ Back to List</button>
+
+                        <div class="adj-container" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+                            <button id="adj-up-btn-${i}" class="adj-btn" style="margin:0; width:100%; background:#333;">+30s</button>
+                            <button id="adj-down-btn-${i}" class="adj-btn" style="margin:0; width:100%; background:#333;">-30s</button>
+                        </div>
+
+                        <div style="display:flex; gap:8px; margin-top:10px;">
+                            <button onclick="toggleExpand(${i})" style="flex:2; margin:0; background:#333; font-size:13px;">⬆ Collapse</button>
+                            ${isEnemy ? `<button onclick="deleteCombatant(event, ${i})" style="flex:1; margin:0; background:#8b2525; font-size:13px;">Delete</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -257,17 +366,15 @@ function renderTimers() {
         card.querySelector('.time-disp').textContent = timeStr;
 
         if (isExp) {
-            const status = t.remaining <= 0 ? "Finished" : (t.running ? "Running" : "Paused");
-            const pos = t.position ? `Order: ${t.position}` : "";
+            const status = t.remaining <= 0 ? "Ready" : (t.running ? "Running" : "Paused");
+            const pos = t.position ? `Order: #${t.position}` : "";
             const toggleTxt = t.running ? "Pause" : "Start";
-            const handTxt = t.raised_hand ? "Lower Hand" : "Raise Hand";
             const adOpc = locked ? "0.5" : "1";
             const adjDisplay = adjustLocked ? "none" : "grid";
 
             card.querySelector('.status-disp').textContent = status;
             card.querySelector('.pos-disp').textContent = pos;
             card.querySelector('.toggle-btn').textContent = toggleTxt;
-            card.querySelector('.hand-btn').textContent = handTxt;
             
             let adjContainer = card.querySelector('.adj-container');
             if (adjContainer) adjContainer.style.display = adjDisplay;
@@ -289,7 +396,6 @@ function renderTimers() {
         }
     }
     
-    // Ensure order in DOM matches ids array
     let currentDOMIds = Array.from(container.children).map(child => Number(child.id.replace("timer-card-", "")));
     let matching = true;
     let visibleIds = ids.filter(id => expanded === null || expanded === id);

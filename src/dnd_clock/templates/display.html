@@ -1,40 +1,61 @@
     <html>
     <head>
-        <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>DnD Clock — Player Display</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
         <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
         <link rel="stylesheet" href="/static/css/styles.css">
     </head>
     <body class="theme-tavern page-display">
-        <div class="help-container">
-            <div class="help-icon">?</div>
-            <div class="help-tooltip">
-                <h3>⚔️ Timer Based Combat</h3>
-                <ul>
-                    <li><strong>Actions</strong>Actions work similar to turn based combat, on your move you can attack, use magic, or make any other move that normally counts as an action.</li>
-                    <li><strong>Action Cooldowns</strong>The timers act as a cooldown for these actions. You may make your action anytime your timer is at 0, regardless of who's turn it is.</li>
-                    <li><strong>Bonus Actions + Movement</strong>These are not tracked by the timer. You may use your bonus action and movement at any time once per action. Your bonus action and movement replenishes after making an action.</li>
-                    <li><strong>Combos</strong>If 2+ players are at 0, they may combine their turns for a stat bonus at the DM's discretion.</li>
-                    <li><strong>How to Control</strong>To use your timer, scan the QR code and click the timer that corresponds to your player. Reset your timer after you take an action.</li>
-                    <li><strong>The Goal</strong>Is to reduce the time of combat and limit how often players have downtime between turns. Change any part of this to what fits your campaign.</li>
-                    <li><strong>For the DM</strong>Use this tool at your leisure, Id recommend maintaining initiative as is to preserve class bonus and for full player sheets leaving about 60s between players, but you may change this as you are able to handle.</li>
-                    <li><strong>Have Fun!</strong></li>
-                </ul>
+        <!-- Display Tab Views -->
+        
+        <!-- 1. TIMERS TAB (Combat View) -->
+        <div id="tab-view-timers" class="display-tab-view" style="display:block;">
+            <h1 style="text-align:center; padding:5px; font-family:'Cinzel', serif; font-size:48px; text-shadow:2px 2px 4px black; margin-top:10px; margin-bottom:5px;">Attack Order</h1>
+
+            <div id="timers" style="
+                display:grid;
+                grid-template-columns:repeat(3,1fr);
+                gap:18px;
+                padding:15px 25px;
+                max-width:1400px;
+                margin:0 auto;
+            "></div>
+
+            <!-- Enemy Status Ribbon (Bottom) -->
+            <div id="enemy-ribbon" style="display:none; max-width:1350px; margin:15px auto 10px; background:rgba(20, 10, 10, 0.85); border:1px solid rgba(231, 76, 60, 0.4); border-radius:8px; padding:10px 20px; box-shadow:0 4px 15px rgba(0,0,0,0.7); text-align:left;">
+                <div style="font-family:'Cinzel', serif; font-size:14px; color:#e74c3c; font-weight:bold; margin-bottom:6px; letter-spacing:1px; text-transform:uppercase;">⚔️ Active Enemies</div>
+                <div id="enemy-ribbon-content" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;"></div>
+            </div>
+                                      
+            <div style="text-align:center; margin:15px 0 25px;">
+                <div style="font-size:14px; opacity:0.8; margin-bottom:5px;">Scan to control your action cooldown</div>
+                <img src="/qr" width="120" style="border-radius:6px; box-shadow:0 4px 10px rgba(0,0,0,0.5);">
+            </div>  
+        </div>
+
+        <!-- 2. WORLD MAP TAB -->
+        <div id="tab-view-map" class="display-tab-view" style="display:none; padding:20px; max-width:1300px; margin:0 auto;">
+            <h1 style="font-family:'Cinzel', serif; font-size:44px; margin-bottom:15px;">World Map</h1>
+            <div id="display-map-container" style="background:#111; border:2px solid #d4af37; border-radius:12px; padding:15px; min-height:500px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <img id="display-map-img" src="" alt="World Map" style="max-width:100%; max-height:75vh; border-radius:8px; display:none;">
+                <div id="display-map-empty" style="color:#888; font-size:18px;">No map image loaded yet. Add maps in Campaign Maintenance.</div>
+                <div id="display-map-notes" style="margin-top:15px; font-size:16px; color:#c0b8a8; text-align:left; width:100%;"></div>
             </div>
         </div>
 
-        <h1 style="text-align:center; padding:5px; font-family:'Cinzel', serif; font-size:56px; text-shadow:2px 2px 4px black; margin-top:10px; margin-bottom:0;">Attack Order</h1>
+        <!-- 3. OBJECTIVES TAB -->
+        <div id="tab-view-objectives" class="display-tab-view" style="display:none; padding:20px; max-width:1100px; margin:0 auto;">
+            <h1 style="font-family:'Cinzel', serif; font-size:44px; margin-bottom:20px;">Current Objectives</h1>
+            <div id="display-objectives-list" style="display:flex; flex-direction:column; gap:15px; text-align:left;"></div>
+        </div>
 
-        <div id="timers" style="
-            display:grid;
-            grid-template-columns:repeat(3,1fr);
-            gap:18px;
-            padding:18px;
-        "></div>
-                                  
-        <div style="text-align:center; margin-bottom:20px;">
-            <div>Scan to control your timer</div>
-            <img src="/qr" width="150">
-        </div>  
+        <!-- 4. RECAPS TAB -->
+        <div id="tab-view-recaps" class="display-tab-view" style="display:none; padding:20px; max-width:1100px; margin:0 auto;">
+            <h1 style="font-family:'Cinzel', serif; font-size:44px; margin-bottom:20px;">Session Recaps</h1>
+            <div id="display-recaps-list" style="display:flex; flex-direction:column; gap:20px; text-align:left;"></div>
+        </div>
 
         <script src="/static/js/display.js"></script>
     </body>

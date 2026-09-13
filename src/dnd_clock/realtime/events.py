@@ -110,9 +110,39 @@ def register_socket_events(socketio):
             return
         CombatService.set_timer_name(data["timer"], data.get("name", ""))
 
+    @socketio.on("set_hp")
+    def handle_set_hp(data):
+        if not isinstance(data, dict) or "timer" not in data or "current_hp" not in data:
+            return
+        CombatService.set_hp(data["timer"], data["current_hp"], data.get("max_hp"))
+
+    @socketio.on("set_timer_meta")
+    def handle_set_timer_meta(data):
+        if not isinstance(data, dict) or "timer" not in data:
+            return
+        CombatService.set_timer_meta(
+            data["timer"],
+            accent_color=data.get("accent_color"),
+            portrait_url=data.get("portrait_url"),
+            is_enemy=data.get("is_enemy"),
+            character_name=data.get("character_name"),
+        )
+
+    @socketio.on("set_display_tab")
+    def handle_set_display_tab(data):
+        if not isinstance(data, dict) or "tab" not in data:
+            return
+        new_state = CombatService.set_display_tab(data["tab"])
+        socketio.emit("control_update", new_state)
+
     @socketio.on("add_timer")
-    def handle_add_timer():
-        CombatService.add_timer()
+    def handle_add_timer(data=None):
+        is_enemy = False
+        name = None
+        if isinstance(data, dict):
+            is_enemy = bool(data.get("is_enemy", False))
+            name = data.get("name")
+        CombatService.add_timer(is_enemy=is_enemy, name=name)
 
     @socketio.on("delete_timer")
     def handle_delete_timer(data):

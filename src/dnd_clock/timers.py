@@ -13,6 +13,7 @@ theme = settings.get("theme", "tavern")
 custom_bg_url = settings.get("custom_bg_url", "")
 timer_done_sound = settings.get("timer_done_sound", "synthetic")
 hand_raise_sound = settings.get("hand_raise_sound", "synthetic")
+display_tab = settings.get("display_tab", "timers")
 
 max_timer_id = settings.get("max_timer_id", 6)
 active_timer_ids = settings.get("active_timer_ids", list(range(1, max_timer_id + 1)))
@@ -30,6 +31,7 @@ control_state = {
     "custom_bg_url": custom_bg_url,
     "timer_done_sound": timer_done_sound,
     "hand_raise_sound": hand_raise_sound,
+    "display_tab": display_tab,
     "cooldown_mode": True
 }
 
@@ -40,18 +42,31 @@ def init_timers():
     timer_vis = settings.get("timer_show_on_remote", {})
     timer_durs = settings.get("timer_durations", {})
     timer_cooldown_durs = settings.get("timer_cooldown_durations", {})
+    timer_hp = settings.get("timer_hp", {})
+    timer_max_hp = settings.get("timer_max_hp", {})
+    timer_colors = settings.get("timer_accent_colors", {})
+    timer_portraits = settings.get("timer_portraits", {})
+    timer_enemies = settings.get("timer_is_enemy", {})
+    timer_chars = settings.get("timer_character_names", {})
+
     timers = {
         i: {
             "remaining": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
             "running": False,
             "last_update": time.time(),
             "name": settings.get("timer_names", {}).get(str(i), f"Timer {i}"),
+            "character_name": timer_chars.get(str(i), ""),
             "finished": False,
             "raised_hand": False,
             "condition": "",
             "duration": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
             "cooldown_duration": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
-            "show_on_remote": timer_vis.get(str(i), True)
+            "show_on_remote": timer_vis.get(str(i), True),
+            "current_hp": int(timer_hp.get(str(i), 30)),
+            "max_hp": int(timer_max_hp.get(str(i), 30)),
+            "accent_color": timer_colors.get(str(i), "#d4af37"),
+            "portrait_url": timer_portraits.get(str(i), ""),
+            "is_enemy": bool(timer_enemies.get(str(i), not timer_vis.get(str(i), True))),
         }
         for i in active_timer_ids
     }
@@ -70,10 +85,17 @@ def save_current_state():
         "adjust_interval": control_state.get("adjust_interval", 30),
         "DEFAULT_DURATION": DEFAULT_DURATION,
         "cooldown_mode": True,
+        "display_tab": control_state.get("display_tab", "timers"),
         "timer_durations": {str(k): v["duration"] for k, v in timers.items()},
         "timer_cooldown_durations": {str(k): v.get("cooldown_duration", v["duration"]) for k, v in timers.items()},
         "timer_names": {str(k): v["name"] for k, v in timers.items()},
+        "timer_character_names": {str(k): v.get("character_name", "") for k, v in timers.items()},
         "timer_show_on_remote": {str(k): v.get("show_on_remote", True) for k, v in timers.items()},
+        "timer_hp": {str(k): v.get("current_hp", 30) for k, v in timers.items()},
+        "timer_max_hp": {str(k): v.get("max_hp", 30) for k, v in timers.items()},
+        "timer_accent_colors": {str(k): v.get("accent_color", "#d4af37") for k, v in timers.items()},
+        "timer_portraits": {str(k): v.get("portrait_url", "") for k, v in timers.items()},
+        "timer_is_enemy": {str(k): v.get("is_enemy", False) for k, v in timers.items()},
         "theme": theme,
         "custom_bg_url": custom_bg_url,
         "timer_done_sound": control_state.get("timer_done_sound", "synthetic"),
@@ -111,6 +133,8 @@ def update_control_state(key, value):
     elif key == "hand_raise_sound":
         hand_raise_sound = value
         control_state["hand_raise_sound"] = hand_raise_sound
+    elif key == "display_tab":
+        control_state["display_tab"] = str(value)
     
     save_current_state()
     return control_state
@@ -121,7 +145,7 @@ def set_timer_duration(timer_id, duration):
     timers[timer_id]["cooldown_duration"] = int(duration)
     save_current_state()
 
-def add_timer():
+def add_timer(is_enemy=False, name=None):
     global max_timer_id, active_timer_ids
     
     new_id = 1
@@ -136,16 +160,44 @@ def add_timer():
         "remaining": DEFAULT_DURATION,
         "running": False,
         "last_update": time.time(),
-        "name": f"Timer {new_id}",
+        "name": name or (f"Enemy {new_id}" if is_enemy else f"Timer {new_id}"),
+        "character_name": "",
         "finished": False,
         "raised_hand": False,
         "condition": "",
         "duration": DEFAULT_DURATION,
         "cooldown_duration": DEFAULT_DURATION,
-        "show_on_remote": True
+        "show_on_remote": not is_enemy,
+        "current_hp": 30,
+        "max_hp": 30,
+        "accent_color": "#e74c3c" if is_enemy else "#d4af37",
+        "portrait_url": "",
+        "is_enemy": bool(is_enemy),
     }
     save_current_state()
     return new_id
+
+def set_hp(timer_id, current_hp, max_hp=None):
+    if timer_id not in timers: return
+    t = timers[timer_id]
+    if max_hp is not None:
+        t["max_hp"] = max(1, int(max_hp))
+    curr = max(0, int(current_hp))
+    if "max_hp" in t:
+        curr = min(t["max_hp"], curr)
+    t["current_hp"] = curr
+    save_current_state()
+
+def set_timer_meta(timer_id, accent_color=None, portrait_url=None, is_enemy=None, character_name=None):
+    if timer_id not in timers: return
+    t = timers[timer_id]
+    if accent_color is not None: t["accent_color"] = str(accent_color)
+    if portrait_url is not None: t["portrait_url"] = str(portrait_url)
+    if is_enemy is not None:
+        t["is_enemy"] = bool(is_enemy)
+        t["show_on_remote"] = not bool(is_enemy)
+    if character_name is not None: t["character_name"] = str(character_name)
+    save_current_state()
 
 def delete_timer(timer_id):
     if timer_id in timers:

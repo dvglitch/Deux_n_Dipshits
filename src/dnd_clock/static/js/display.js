@@ -104,6 +104,8 @@ function formatTime(s) {
     return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
+let activeDisplayTab = "timers";
+
 socket.on("control_update", (data) => {
     numTimers = data.num_timers || 6;
     dmExclusive = data.dm_exclusive || false;
@@ -125,7 +127,96 @@ socket.on("control_update", (data) => {
         selectedHandSound = data.hand_raise_sound;
         AudioController.setHandSound(data.hand_raise_sound);
     }
+
+    if (data.display_tab && data.display_tab !== activeDisplayTab) {
+        switchDisplayTab(data.display_tab);
+    }
 });
+
+function switchDisplayTab(tab) {
+    activeDisplayTab = tab;
+    document.querySelectorAll(".display-tab-view").forEach(el => el.style.display = "none");
+    const target = document.getElementById(`tab-view-${tab}`);
+    if (target) {
+        target.style.display = "block";
+    }
+    if (tab === "map") loadDisplayMap();
+    else if (tab === "objectives") loadDisplayObjectives();
+    else if (tab === "recaps") loadDisplayRecaps();
+}
+
+async function loadDisplayMap() {
+    try {
+        const res = await fetch("/api/campaign/world_maps");
+        const data = await res.json();
+        const maps = data.records || [];
+        const imgEl = document.getElementById("display-map-img");
+        const emptyEl = document.getElementById("display-map-empty");
+        const notesEl = document.getElementById("display-map-notes");
+        if (maps.length > 0 && maps[0].image_url) {
+            imgEl.src = maps[0].image_url;
+            imgEl.style.display = "block";
+            emptyEl.style.display = "none";
+            notesEl.textContent = maps[0].notes || "";
+        } else {
+            imgEl.style.display = "none";
+            emptyEl.style.display = "block";
+            notesEl.textContent = "";
+        }
+    } catch (e) {
+        console.error("Failed to load map:", e);
+    }
+}
+
+async function loadDisplayObjectives() {
+    try {
+        const res = await fetch("/api/campaign/objectives");
+        const data = await res.json();
+        const container = document.getElementById("display-objectives-list");
+        if (!container) return;
+        const objs = (data.records || []).filter(o => o.status === "Active");
+        if (objs.length === 0) {
+            container.innerHTML = `<div style="text-align:center; color:#888; font-size:20px; padding:40px;">No active objectives at this time.</div>`;
+            return;
+        }
+        container.innerHTML = objs.map(o => `
+            <div style="background:rgba(20,16,12,0.85); border:1px solid rgba(212,175,55,0.3); border-radius:10px; padding:20px; box-shadow:0 6px 15px rgba(0,0,0,0.5);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <h3 style="margin:0; font-family:'Cinzel', serif; color:#d4af37; font-size:24px;">${o.title}</h3>
+                    <span style="font-size:12px; font-weight:bold; padding:4px 10px; border-radius:4px; background:${o.priority === 'High' ? '#c82333' : '#e67e22'}; color:white;">${o.priority || 'Medium'} Priority</span>
+                </div>
+                <p style="margin:0; font-size:16px; color:#dcdcdc; line-height:1.5;">${o.description || ''}</p>
+            </div>
+        `).join("");
+    } catch (e) {
+        console.error("Failed to load objectives:", e);
+    }
+}
+
+async function loadDisplayRecaps() {
+    try {
+        const res = await fetch("/api/campaign/recaps");
+        const data = await res.json();
+        const container = document.getElementById("display-recaps-list");
+        if (!container) return;
+        const recaps = data.records || [];
+        if (recaps.length === 0) {
+            container.innerHTML = `<div style="text-align:center; color:#888; font-size:20px; padding:40px;">No session recaps available yet.</div>`;
+            return;
+        }
+        container.innerHTML = recaps.slice(-3).reverse().map(r => `
+            <div style="background:rgba(20,16,12,0.85); border:1px solid rgba(212,175,55,0.3); border-radius:10px; padding:22px; box-shadow:0 6px 15px rgba(0,0,0,0.5);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="margin:0; font-family:'Cinzel', serif; color:#d4af37; font-size:24px;">Session ${r.session_number || ''}: ${r.title || 'Untitled'}</h3>
+                    <span style="font-size:14px; color:#aaa;">${r.date || ''}</span>
+                </div>
+                <p style="margin:0; font-size:16px; color:#dcdcdc; line-height:1.6;">${r.summary || ''}</p>
+            </div>
+        `).join("");
+    } catch (e) {
+        console.error("Failed to load recaps:", e);
+    }
+}
 
 function applyCustomBg(url) {
     if (url && url.trim() !== "") {
@@ -180,58 +271,80 @@ socket.on("update", (data) => {
 
     const currentIds = Object.keys(data).map(Number).sort((a,b) => a - b);
     
-    if (currentIds.length <= 4) {
+    // Split player timers vs enemy combatants
+    const playerIds = currentIds.filter(id => !data[id].is_enemy && data[id].show_on_remote !== false);
+    const enemyIds = currentIds.filter(id => data[id].is_enemy || data[id].show_on_remote === false);
+
+    // Dynamic grid layout for player timers
+    if (playerIds.length <= 2) {
         container.style.gridTemplateColumns = "repeat(2, 1fr)";
+    } else if (playerIds.length <= 4) {
+        container.style.gridTemplateColumns = "repeat(2, 1fr)";
+    } else if (playerIds.length <= 6) {
+        container.style.gridTemplateColumns = "repeat(3, 1fr)";
     } else {
         container.style.gridTemplateColumns = "repeat(3, 1fr)";
     }
 
+    // Remove cards no longer in player timers
     Array.from(container.children).forEach(child => {
         const idNum = Number(child.id.replace("display-timer-", ""));
-        if (!currentIds.includes(idNum)) {
+        if (!playerIds.includes(idNum)) {
             child.remove();
         }
     });
 
-    for (let i of currentIds) {
+    // 1. Render Player Timer Cards
+    for (let i of playerIds) {
         const t = data[i];
 
         let div = document.getElementById(`display-timer-${i}`);
 
-        // Create the card strictly once
         if (!div) {
             div = document.createElement("div");
             div.id = `display-timer-${i}`;
             div.style.cssText = `
                 border-radius:15px;
-                padding:30px;
+                padding:25px 20px;
                 text-align:center;
                 font-size:30px;
                 position:relative;
                 transition: all 0.3s ease, box-shadow 0.3s ease;
+                box-sizing: border-box;
             `;
 
             div.innerHTML = `
-                <div id="disp-name-${i}" style="font-size:24px; margin-bottom:10px; text-shadow: 1px 1px 2px black;"></div>
+                <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:10px;">
+                    <img id="disp-portrait-${i}" src="" style="width:46px; height:46px; border-radius:50%; object-fit:cover; border:2px solid #d4af37; display:none;">
+                    <div style="text-align:center;">
+                        <div id="disp-name-${i}" style="font-size:24px; font-weight:bold; font-family:'Cinzel', serif; text-shadow: 1px 1px 2px black;"></div>
+                        <div id="disp-char-${i}" style="font-size:14px; color:#c0b8a8; text-shadow:1px 1px 1px black; display:none;"></div>
+                    </div>
+                </div>
                 
-                <div id="disp-time-${i}" style="font-size:64px; font-weight:bold; font-variant-numeric: tabular-nums; text-shadow: 2px 2px 4px black; transition: color 0.5s;"></div>
+                <div id="disp-time-${i}" style="font-size:64px; font-weight:bold; font-variant-numeric: tabular-nums; text-shadow: 2px 2px 4px black; transition: color 0.5s; margin:8px 0;"></div>
                 
-                <div id="disp-status-${i}" style="margin-top:10px;"></div>
+                <div id="disp-status-${i}" style="font-size:16px; text-transform:uppercase; letter-spacing:1px; opacity:0.85;"></div>
                 
-                <div id="disp-order-${i}" style="display:none; margin-top:15px; font-size:28px;"></div>
+                <div id="disp-order-${i}" style="display:none; margin-top:10px; font-size:22px; font-weight:bold; color:#ffd700;"></div>
                 
                 <div id="disp-cond-container-${i}"></div>
 
-                <!-- Progress Bar -->
-                <div style="position:absolute; bottom:0; left:0; right:0; height:12px; background:rgba(0,0,0,0.5); border-radius:0 0 15px 15px; overflow:hidden;">
+                <!-- Visual HP Bar Container -->
+                <div style="margin-top:15px; background:rgba(0,0,0,0.6); border-radius:6px; height:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.15);">
+                    <div id="disp-hp-bar-${i}" style="height:100%; width:100%; background:#2ecc71; transition:width 0.4s ease, background-color 0.4s ease;"></div>
+                </div>
+
+                <!-- Cooldown Progress Bar (Bottom) -->
+                <div style="position:absolute; bottom:0; left:0; right:0; height:8px; background:rgba(0,0,0,0.5); border-radius:0 0 15px 15px; overflow:hidden;">
                     <div id="disp-pb-${i}" style="height:100%; width:100%; background:#4CAF50; transition:width 0.5s linear, background-color 0.5s;"></div>
                 </div>
             `;
             container.appendChild(div);
         }
 
-        // Surgical property updates
-        let bg = "#444"; 
+        // Card background & color logic
+        let bg = "#383430"; 
         if (t.running) bg = "#1e7f3f"; 
         if (t.remaining <= 0) bg = "#a83232"; 
 
@@ -240,22 +353,41 @@ socket.on("update", (data) => {
         if (pct <= 50) pbColor = "#f39c12"; 
         if (pct <= 20) pbColor = "#e74c3c"; 
 
-        let boxShadow = "0 4px 10px rgba(0,0,0,0.5)";
+        const accentColor = t.accent_color || "#d4af37";
+        let boxShadow = `0 6px 15px rgba(0,0,0,0.6), inset 0 0 0 2px ${accentColor}40`;
         if (t.raised_hand) {
-            boxShadow = "inset 0 0 50px 10px rgba(255, 215, 0, 0.5), inset 0 0 20px 5px rgba(255, 215, 0, 0.8), " + boxShadow;
+            boxShadow = `inset 0 0 50px 10px rgba(255, 215, 0, 0.5), inset 0 0 20px 5px rgba(255, 215, 0, 0.8), ${boxShadow}`;
         }
 
         div.style.background = bg;
-        div.style.border = "none";
+        div.style.border = `2px solid ${accentColor}80`;
         div.style.boxShadow = boxShadow;
 
-        document.getElementById(`disp-name-${i}`).innerText = t.name || ("Timer " + i);
+        document.getElementById(`disp-name-${i}`).innerText = t.name || ("Player " + i);
+        
+        const charEl = document.getElementById(`disp-char-${i}`);
+        if (t.character_name) {
+            charEl.innerText = t.character_name;
+            charEl.style.display = "block";
+        } else {
+            charEl.style.display = "none";
+        }
+
+        const portraitEl = document.getElementById(`disp-portrait-${i}`);
+        if (t.portrait_url) {
+            portraitEl.src = t.portrait_url;
+            portraitEl.style.display = "block";
+            portraitEl.style.borderColor = accentColor;
+        } else {
+            portraitEl.style.display = "none";
+        }
+
         document.getElementById(`disp-time-${i}`).innerText = formatTime(t.remaining);
-        document.getElementById(`disp-status-${i}`).innerText = t.running ? "Running" : (t.remaining <= 0 ? "Finished" : "Paused");
+        document.getElementById(`disp-status-${i}`).innerText = t.running ? "Running" : (t.remaining <= 0 ? "Ready" : "Paused");
         
         const orderDiv = document.getElementById(`disp-order-${i}`);
         if (t.position) {
-            orderDiv.innerText = `Order: ${t.position}`;
+            orderDiv.innerText = `Order: #${t.position}`;
             orderDiv.style.display = "block";
         } else {
             orderDiv.style.display = "none";
@@ -263,13 +395,51 @@ socket.on("update", (data) => {
         
         const condContainer = document.getElementById(`disp-cond-container-${i}`);
         if (t.condition) {
-            condContainer.innerHTML = `<div style="position:absolute; top:-12px; right:-12px; background:linear-gradient(145deg, #333, #111); color:#fff; padding:6px 16px; border-radius:4px; font-size:22px; font-weight:bold; font-family:'Cinzel', serif; box-shadow:0 6px 12px rgba(0,0,0,0.8); border:2px solid #666; letter-spacing:1px; z-index:10;">${t.condition}</div>`;
+            condContainer.innerHTML = `<div style="position:absolute; top:-10px; right:-10px; background:linear-gradient(145deg, #333, #111); color:#fff; padding:4px 12px; border-radius:4px; font-size:16px; font-weight:bold; font-family:'Cinzel', serif; box-shadow:0 4px 10px rgba(0,0,0,0.8); border:2px solid #d4af37; letter-spacing:1px; z-index:10;">${t.condition}</div>`;
         } else {
             condContainer.innerHTML = "";
         }
 
+        // HP Bar calculation
+        const curHp = t.current_hp !== undefined ? t.current_hp : 30;
+        const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
+        const hpPct = Math.max(0, Math.min(100, (curHp / Math.max(1, maxHp)) * 100));
+        let hpColor = "#2ecc71";
+        if (hpPct <= 50) hpColor = "#f39c12";
+        if (hpPct <= 25) hpColor = "#e74c3c";
+
+        const hpBar = document.getElementById(`disp-hp-bar-${i}`);
+        if (hpBar) {
+            hpBar.style.width = `${hpPct}%`;
+            hpBar.style.background = hpColor;
+        }
+
         const pb = document.getElementById(`disp-pb-${i}`);
-        pb.style.width = `${pct}%`;
-        pb.style.background = pbColor;
+        if (pb) {
+            pb.style.width = `${pct}%`;
+            pb.style.background = pbColor;
+        }
+    }
+
+    // 2. Render Enemy Status Ribbon at the bottom (names & conditions only, NO countdowns on TV)
+    const ribbon = document.getElementById("enemy-ribbon");
+    const ribbonContent = document.getElementById("enemy-ribbon-content");
+    if (ribbon && ribbonContent) {
+        if (enemyIds.length > 0) {
+            ribbon.style.display = "block";
+            ribbonContent.innerHTML = enemyIds.map(id => {
+                const enemy = data[id];
+                const condTag = enemy.condition ? `<span style="background:#a83232; color:white; font-size:11px; padding:2px 6px; border-radius:3px; margin-left:6px;">${enemy.condition}</span>` : '';
+                return `
+                    <div style="background:rgba(40, 20, 20, 0.9); border:1px solid #e74c3c; border-radius:5px; padding:5px 12px; font-size:14px; font-weight:bold; color:#f5f5f5; display:inline-flex; align-items:center;">
+                        <span>${enemy.name}</span>
+                        ${condTag}
+                    </div>
+                `;
+            }).join("");
+        } else {
+            ribbon.style.display = "none";
+            ribbonContent.innerHTML = "";
+        }
     }
 });

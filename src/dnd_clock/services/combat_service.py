@@ -95,8 +95,45 @@ class CombatService:
         return True
 
     @staticmethod
-    def add_timer() -> int:
-        return tm.add_timer()
+    def set_hp(timer_id_raw: Any, current_hp_raw: Any, max_hp_raw: Any = None) -> bool:
+        timer_id = _parse_int(timer_id_raw)
+        current_hp = _parse_int(current_hp_raw)
+        max_hp = _parse_int(max_hp_raw) if max_hp_raw is not None else None
+        if timer_id is None or current_hp is None:
+            return False
+        tm.set_hp(timer_id, current_hp, max_hp=max_hp)
+        return True
+
+    @staticmethod
+    def set_timer_meta(
+        timer_id_raw: Any,
+        accent_color: Optional[str] = None,
+        portrait_url: Optional[str] = None,
+        is_enemy: Optional[bool] = None,
+        character_name: Optional[str] = None,
+    ) -> bool:
+        timer_id = _parse_int(timer_id_raw)
+        if timer_id is None:
+            return False
+        tm.set_timer_meta(
+            timer_id,
+            accent_color=accent_color,
+            portrait_url=portrait_url,
+            is_enemy=is_enemy,
+            character_name=character_name,
+        )
+        return True
+
+    @staticmethod
+    def add_timer(is_enemy: bool = False, name: Optional[str] = None) -> int:
+        return tm.add_timer(is_enemy=bool(is_enemy), name=name)
+
+    @staticmethod
+    def set_display_tab(tab_raw: Any) -> Dict[str, Any]:
+        tab = str(tab_raw or "timers").strip().lower()
+        if tab not in {"timers", "map", "objectives", "recaps"}:
+            tab = "timers"
+        return tm.update_control_state("display_tab", tab)
 
     @staticmethod
     def delete_timer(timer_id_raw: Any) -> bool:

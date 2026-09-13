@@ -1,13 +1,79 @@
+<!DOCTYPE html>
 <html>
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DnD Clock — DM Mobile</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .dm-quick-bar { display: flex; gap: 8px; margin-bottom: 15px; }
+        .dm-quick-btn { flex: 1; padding: 10px; font-size: 13px; font-weight: bold; border-radius: 6px; border: 1px solid #555; background: #282420; color: white; cursor: pointer; }
+        .dm-quick-btn.active { background: #d4af37; color: #111; border-color: #d4af37; }
+        .dm-filter-btn { flex: 1; padding: 8px; font-size: 13px; border-radius: 6px; border: 1px solid #444; background: #222; color: #ccc; cursor: pointer; }
+        .dm-filter-btn.active { background: #444; color: #d4af37; font-weight: bold; border-color: #d4af37; }
+        .dm-display-select { background: #222; color: #d4af37; border: 1px solid #555; padding: 8px; border-radius: 6px; font-family: 'Cinzel', serif; font-size: 13px; width: 100%; box-sizing: border-box; }
+    </style>
 </head>
 <body class="theme-table page-remote">
-    <h2>DM Clock</h2>
-    <div id="timers" style="display:flex; flex-direction:column; padding:15px; max-width:600px; margin:0 auto;"></div>
+    <div style="max-width:600px; margin:0 auto; padding:15px 12px 60px;">
+        <!-- Header -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h2 style="margin:0; font-family:'Cinzel', serif; font-size:24px;">⚔️ DM Mobile</h2>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:12px; font-weight:bold; opacity:0.8;">Lock</span>
+                <label class="switch" style="width:50px; height:28px;">
+                    <input type="checkbox" id="dmLockToggle" onchange="toggleDmLock()">
+                    <span class="slider" style="border-radius:28px;"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- TV Display Tab Switcher (Controlled by DM) -->
+        <div style="background:rgba(20,16,12,0.85); border:1px solid rgba(212,175,55,0.25); border-radius:8px; padding:10px 12px; margin-bottom:12px; display:flex; align-items:center; gap:10px;">
+            <span style="font-size:13px; font-weight:bold; white-space:nowrap; color:#d4af37;">TV Screen:</span>
+            <select id="dmDisplayTabSelect" class="dm-display-select" onchange="changeDmDisplayTab()">
+                <option value="timers">⚔️ Timers (Combat View)</option>
+                <option value="map">🗺️ World Map</option>
+                <option value="objectives">🎯 Objectives</option>
+                <option value="recaps">📜 Session Recaps</option>
+            </select>
+        </div>
+
+        <!-- Master Actions -->
+        <div class="dm-quick-bar">
+            <button class="dm-quick-btn" style="background:#1e7f3f;" onclick="toggleAll()">▶ Start All</button>
+            <button class="dm-quick-btn" style="background:#8b2525;" onclick="confirmResetAll()">🔄 Reset All</button>
+            <button class="dm-quick-btn" style="background:#2855a7;" onclick="openAddEnemyModal()">+ Enemy</button>
+        </div>
+
+        <!-- Category Filter (All vs Players vs Enemies) -->
+        <div style="display:flex; gap:6px; margin-bottom:15px;">
+            <button id="filter-all" class="dm-filter-btn active" onclick="setDmFilter('all')">All Combatants</button>
+            <button id="filter-players" class="dm-filter-btn" onclick="setDmFilter('players')">Players Only</button>
+            <button id="filter-enemies" class="dm-filter-btn" onclick="setDmFilter('enemies')">Enemies Only</button>
+        </div>
+
+        <!-- Timer List Container -->
+        <div id="timers" style="display:flex; flex-direction:column;"></div>
+    </div>
+
+    <!-- Quick Add Enemy Modal -->
+    <div id="add-enemy-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center; padding:20px; box-sizing:border-box;">
+        <div style="background:#241f1a; border:2px solid #e74c3c; border-radius:10px; padding:20px; max-width:400px; width:100%; text-align:left;">
+            <h3 style="margin-top:0; color:#e74c3c; font-family:'Cinzel', serif;">+ Add Enemy Combatant</h3>
+            <div style="margin-bottom:12px;">
+                <label style="font-size:12px; color:#aaa; display:block; margin-bottom:4px;">Enemy Name (e.g. Goblin 1, Orc Group):</label>
+                <input id="new-enemy-name" type="text" placeholder="Enemy Name" style="width:100%; text-align:left;">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+                <button onclick="closeAddEnemyModal()" style="background:#555;">Cancel</button>
+                <button onclick="submitAddEnemy()" style="background:#e74c3c;">Add Enemy</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/dm.js"></script>
 </body>
 </html>
