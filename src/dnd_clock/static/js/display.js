@@ -623,9 +623,6 @@ socket.on("update", (data) => {
             hpBar.style.width = `${hpPct}%`;
             hpBar.style.background = hpColor;
         }
-            hpBar.style.width = `${hpPct}%`;
-            hpBar.style.background = hpColor;
-        }
 
         const pb = document.getElementById(`disp-pb-${i}`);
         if (pb) {
