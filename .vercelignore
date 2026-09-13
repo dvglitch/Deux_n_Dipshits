@@ -1,0 +1,12 @@
+.git
+.github
+tests
+ai
+*.md
+.venv
+*.spec
+build.bat
+start-tunnel.py
+DnD-Clock.spec
+dist/
+build/
