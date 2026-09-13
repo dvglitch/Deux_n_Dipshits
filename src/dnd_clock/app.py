@@ -9,6 +9,7 @@ from .routes.dm import dm_bp
 from .routes.home import home_bp
 from .routes.qr import qr_bp
 from .routes.remote import remote_bp
+from .routes.campaign import campaign_bp
 from .database.factory import create_campaign_repository
 from .database.repositories import RepositoryError
 from .realtime import register_socket_events
@@ -43,6 +44,7 @@ def create_app(start_background_task=True):
     flask_app.register_blueprint(home_bp)
     flask_app.register_blueprint(qr_bp)
     flask_app.register_blueprint(remote_bp)
+    flask_app.register_blueprint(campaign_bp)
 
     register_socket_events(socketio)
 

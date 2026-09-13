@@ -63,11 +63,15 @@ def _sanitize_db_url(url: str | None) -> str | None:
 
 
 def database_url() -> str | None:
-    """Return the preferred server-side PostgreSQL connection string."""
+    """Return the preferred server-side PostgreSQL connection string.
+    
+    Prefers pooled connections (POSTGRES_URL / POSTGRES_PRISMA_URL) which support
+    IPv4 on serverless hosts like Vercel over direct IPv6 connections (port 5432).
+    """
     raw_url = (
-        os.getenv("DATABASE_URL")
-        or os.getenv("POSTGRES_URL")
+        os.getenv("POSTGRES_URL")
         or os.getenv("POSTGRES_PRISMA_URL")
+        or os.getenv("DATABASE_URL")
         or os.getenv("POSTGRES_URL_NON_POOLING")
     )
     return _sanitize_db_url(raw_url)

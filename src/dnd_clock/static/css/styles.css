@@ -318,6 +318,141 @@ body.page-home {
     border-radius: 10px;
     padding: 24px;
     text-align: left;
+}
+
+/* Mode Switcher Tabs */
+.mode-switcher-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px auto 30px;
+    max-width: 600px;
+}
+
+.mode-tab-btn {
+    flex: 1;
+    padding: 12px 20px;
+    font-size: 16px;
+    font-family: 'Cinzel', serif;
+    background: #2a2520;
+    color: #c0b8a8;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.mode-tab-btn:hover {
+    background: #3a322b;
+    color: #fff;
+    border-color: rgba(212, 175, 55, 0.4);
+}
+
+.mode-tab-btn.active {
+    background: #d4af37;
+    color: #111;
+    font-weight: bold;
+    border-color: #d4af37;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+}
+
+/* Campaign Maintenance Workspace */
+.maint-container {
+    max-width: 1100px;
+    margin: 0 auto 50px;
+    background: #1c1814;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    text-align: left;
+}
+
+.maint-subnav {
+    display: flex;
+    gap: 10px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+}
+
+.maint-subnav-btn {
+    background: #282420;
+    color: #ccc;
+    padding: 8px 16px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.maint-subnav-btn:hover {
+    background: #3a342c;
+    color: white;
+}
+
+.maint-subnav-btn.active {
+    background: #4a3e28;
+    color: #d4af37;
+    border-color: #d4af37;
+}
+
+.maint-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.maint-table th, .maint-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #333;
+    text-align: left;
+}
+
+.maint-table th {
+    color: #d4af37;
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+}
+
+.maint-form-card {
+    background: #24201c;
+    border: 1px solid #3a342c;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.maint-btn-primary {
+    background: #1e7f3f;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.maint-btn-primary:hover {
+    background: #28a745;
+}
+
+.maint-btn-danger {
+    background: #8b2525;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.maint-btn-danger:hover {
+    background: #c82333;
+}
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
     transition: border-color 0.3s ease;
 }

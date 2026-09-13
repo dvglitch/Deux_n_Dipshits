@@ -565,3 +565,374 @@ function changeHandSound() {
 }
 
 fetchSounds();
+
+// ==========================================
+// ====== MODE SWITCHER & MAINTENANCE =======
+// ==========================================
+
+let currentMaintTab = 'players';
+
+function switchControlMode(mode) {
+    const sessionView = document.getElementById('view-session-control');
+    const maintView = document.getElementById('view-campaign-maintenance');
+    const btnSession = document.getElementById('btn-mode-session');
+    const btnMaint = document.getElementById('btn-mode-maintenance');
+
+    if (mode === 'maintenance') {
+        if (sessionView) sessionView.style.display = 'none';
+        if (maintView) maintView.style.display = 'block';
+        if (btnSession) btnSession.classList.remove('active');
+        if (btnMaint) btnMaint.classList.add('active');
+        loadCurrentMaintTab();
+        try {
+            const url = new URL(window.location);
+            url.searchParams.set('mode', 'maintenance');
+            window.history.replaceState({}, '', url);
+        } catch (e) {}
+    } else {
+        if (sessionView) sessionView.style.display = 'block';
+        if (maintView) maintView.style.display = 'none';
+        if (btnSession) btnSession.classList.add('active');
+        if (btnMaint) btnMaint.classList.remove('active');
+        try {
+            const url = new URL(window.location);
+            url.searchParams.set('mode', 'session');
+            window.history.replaceState({}, '', url);
+        } catch (e) {}
+    }
+}
+
+function showMaintTab(tab) {
+    currentMaintTab = tab;
+    document.querySelectorAll('.maint-subnav-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.maint-panel').forEach(panel => panel.style.display = 'none');
+
+    const activeBtn = document.querySelector(`[onclick="showMaintTab('${tab}')"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    const panel = document.getElementById(`maint-panel-${tab}`);
+    if (panel) panel.style.display = 'block';
+
+    loadCurrentMaintTab();
+}
+
+function showMaintStatus(msg, isError = false) {
+    const statusDiv = document.getElementById('maint-status');
+    if (!statusDiv) return;
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = isError ? 'rgba(200, 35, 51, 0.2)' : 'rgba(40, 167, 69, 0.2)';
+    statusDiv.style.border = isError ? '1px solid #c82333' : '1px solid #28a745';
+    statusDiv.style.color = isError ? '#ff8080' : '#80ff80';
+    statusDiv.textContent = msg;
+    setTimeout(() => { statusDiv.style.display = 'none'; }, 4000);
+}
+
+function loadCurrentMaintTab() {
+    if (currentMaintTab === 'players') loadPlayers();
+    else if (currentMaintTab === 'spells') loadSpells();
+    else if (currentMaintTab === 'maps') loadMaps();
+    else if (currentMaintTab === 'objectives') loadObjectives();
+    else if (currentMaintTab === 'recaps') loadRecaps();
+}
+
+// --- Players Collection ---
+async function loadPlayers() {
+    try {
+        const res = await fetch('/api/campaign/player_profiles');
+        const data = await res.json();
+        const tbody = document.getElementById('maint-players-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const records = data.records || [];
+        if (records.length === 0) {
+            addPlayerRow();
+        } else {
+            records.forEach(r => addPlayerRow(r));
+        }
+    } catch (e) {
+        showMaintStatus('Failed to load players: ' + e.message, true);
+    }
+}
+
+function addPlayerRow(data = {}) {
+    const tbody = document.getElementById('maint-players-tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="text" class="p-name" value="${data.name || ''}" placeholder="Player Name" style="width:100%;"></td>
+        <td><input type="text" class="p-char" value="${data.character_name || ''}" placeholder="Character Name" style="width:100%;"></td>
+        <td><input type="number" class="p-hp" value="${data.max_hp || 30}" style="width:80px;"></td>
+        <td><input type="number" class="p-cd" value="${data.default_cooldown || 60}" style="width:90px;"></td>
+        <td><input type="text" class="p-color" value="${data.accent_color || '#d4af37'}" style="width:100px;"></td>
+        <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+async function savePlayersCollection() {
+    const rows = Array.from(document.querySelectorAll('#maint-players-tbody tr'));
+    const records = rows.map((r, idx) => ({
+        id: `player_${idx + 1}`,
+        name: r.querySelector('.p-name')?.value || '',
+        character_name: r.querySelector('.p-char')?.value || '',
+        max_hp: parseInt(r.querySelector('.p-hp')?.value, 10) || 30,
+        default_cooldown: parseInt(r.querySelector('.p-cd')?.value, 10) || 60,
+        accent_color: r.querySelector('.p-color')?.value || '#d4af37'
+    })).filter(r => r.name || r.character_name);
+
+    try {
+        const res = await fetch('/api/campaign/player_profiles', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({records})
+        });
+        if (res.ok) showMaintStatus('Party Profiles saved successfully to database.');
+        else throw new Error((await res.json()).error || 'Save failed');
+    } catch (e) {
+        showMaintStatus('Error saving players: ' + e.message, true);
+    }
+}
+
+// --- Spells Collection ---
+async function loadSpells() {
+    try {
+        const res = await fetch('/api/campaign/spells');
+        const data = await res.json();
+        const tbody = document.getElementById('maint-spells-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const records = data.records || [];
+        if (records.length === 0) {
+            addSpellRow();
+        } else {
+            records.forEach(r => addSpellRow(r));
+        }
+    } catch (e) {
+        showMaintStatus('Failed to load spells: ' + e.message, true);
+    }
+}
+
+function addSpellRow(data = {}) {
+    const tbody = document.getElementById('maint-spells-tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="text" class="s-name" value="${data.name || ''}" placeholder="Spell Name" style="width:100%;"></td>
+        <td><input type="number" class="s-level" value="${data.level !== undefined ? data.level : 1}" min="0" max="9" style="width:60px;"></td>
+        <td><input type="text" class="s-duration" value="${data.duration || '1 action'}" style="width:100px;"></td>
+        <td><input type="checkbox" class="s-conc" ${data.concentration ? 'checked' : ''}></td>
+        <td><input type="text" class="s-desc" value="${data.description || ''}" placeholder="Description / effects" style="width:100%;"></td>
+        <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+async function saveSpellsCollection() {
+    const rows = Array.from(document.querySelectorAll('#maint-spells-tbody tr'));
+    const records = rows.map((r, idx) => ({
+        id: `spell_${idx + 1}`,
+        name: r.querySelector('.s-name')?.value || '',
+        level: parseInt(r.querySelector('.s-level')?.value, 10) || 0,
+        duration: r.querySelector('.s-duration')?.value || '',
+        concentration: Boolean(r.querySelector('.s-conc')?.checked),
+        description: r.querySelector('.s-desc')?.value || ''
+    })).filter(r => r.name);
+
+    try {
+        const res = await fetch('/api/campaign/spells', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({records})
+        });
+        if (res.ok) showMaintStatus('Spellbook saved successfully to database.');
+        else throw new Error((await res.json()).error || 'Save failed');
+    } catch (e) {
+        showMaintStatus('Error saving spells: ' + e.message, true);
+    }
+}
+
+// --- Maps Collection ---
+async function loadMaps() {
+    try {
+        const res = await fetch('/api/campaign/world_maps');
+        const data = await res.json();
+        const tbody = document.getElementById('maint-maps-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const records = data.records || [];
+        if (records.length === 0) {
+            addMapRow();
+        } else {
+            records.forEach(r => addMapRow(r));
+        }
+    } catch (e) {
+        showMaintStatus('Failed to load maps: ' + e.message, true);
+    }
+}
+
+function addMapRow(data = {}) {
+    const tbody = document.getElementById('maint-maps-tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="text" class="m-title" value="${data.name || ''}" placeholder="Map Name" style="width:100%;"></td>
+        <td><input type="text" class="m-url" value="${data.image_url || ''}" placeholder="Image URL / Path" style="width:100%;"></td>
+        <td><input type="text" class="m-notes" value="${data.notes || ''}" placeholder="Notes / markers" style="width:100%;"></td>
+        <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+async function saveMapsCollection() {
+    const rows = Array.from(document.querySelectorAll('#maint-maps-tbody tr'));
+    const records = rows.map((r, idx) => ({
+        id: `map_${idx + 1}`,
+        name: r.querySelector('.m-title')?.value || '',
+        image_url: r.querySelector('.m-url')?.value || '',
+        notes: r.querySelector('.m-notes')?.value || ''
+    })).filter(r => r.name);
+
+    try {
+        const res = await fetch('/api/campaign/world_maps', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({records})
+        });
+        if (res.ok) showMaintStatus('World Maps saved successfully to database.');
+        else throw new Error((await res.json()).error || 'Save failed');
+    } catch (e) {
+        showMaintStatus('Error saving maps: ' + e.message, true);
+    }
+}
+
+// --- Objectives Collection ---
+async function loadObjectives() {
+    try {
+        const res = await fetch('/api/campaign/objectives');
+        const data = await res.json();
+        const tbody = document.getElementById('maint-objectives-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const records = data.records || [];
+        if (records.length === 0) {
+            addObjectiveRow();
+        } else {
+            records.forEach(r => addObjectiveRow(r));
+        }
+    } catch (e) {
+        showMaintStatus('Failed to load objectives: ' + e.message, true);
+    }
+}
+
+function addObjectiveRow(data = {}) {
+    const tbody = document.getElementById('maint-objectives-tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="text" class="obj-title" value="${data.title || ''}" placeholder="Objective Title" style="width:100%;"></td>
+        <td><input type="text" class="obj-desc" value="${data.description || ''}" placeholder="Details / next step" style="width:100%;"></td>
+        <td>
+            <select class="obj-status" style="background:#333; color:white; padding:6px; border-radius:4px;">
+                <option value="Active" ${data.status === 'Active' ? 'selected' : ''}>Active</option>
+                <option value="Completed" ${data.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                <option value="Inactive" ${data.status === 'Inactive' ? 'selected' : ''}>Inactive</option>
+            </select>
+        </td>
+        <td>
+            <select class="obj-priority" style="background:#333; color:white; padding:6px; border-radius:4px;">
+                <option value="High" ${data.priority === 'High' ? 'selected' : ''}>High</option>
+                <option value="Medium" ${data.priority === 'Medium' ? 'selected' : ''}>Medium</option>
+                <option value="Low" ${data.priority === 'Low' ? 'selected' : ''}>Low</option>
+            </select>
+        </td>
+        <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+async function saveObjectivesCollection() {
+    const rows = Array.from(document.querySelectorAll('#maint-objectives-tbody tr'));
+    const records = rows.map((r, idx) => ({
+        id: `obj_${idx + 1}`,
+        title: r.querySelector('.obj-title')?.value || '',
+        description: r.querySelector('.obj-desc')?.value || '',
+        status: r.querySelector('.obj-status')?.value || 'Active',
+        priority: r.querySelector('.obj-priority')?.value || 'Medium'
+    })).filter(r => r.title);
+
+    try {
+        const res = await fetch('/api/campaign/objectives', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({records})
+        });
+        if (res.ok) showMaintStatus('Objectives saved successfully to database.');
+        else throw new Error((await res.json()).error || 'Save failed');
+    } catch (e) {
+        showMaintStatus('Error saving objectives: ' + e.message, true);
+    }
+}
+
+// --- Recaps Collection ---
+async function loadRecaps() {
+    try {
+        const res = await fetch('/api/campaign/recaps');
+        const data = await res.json();
+        const tbody = document.getElementById('maint-recaps-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const records = data.records || [];
+        if (records.length === 0) {
+            addRecapRow();
+        } else {
+            records.forEach(r => addRecapRow(r));
+        }
+    } catch (e) {
+        showMaintStatus('Failed to load recaps: ' + e.message, true);
+    }
+}
+
+function addRecapRow(data = {}) {
+    const tbody = document.getElementById('maint-recaps-tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="number" class="rec-num" value="${data.session_number !== undefined ? data.session_number : ''}" placeholder="#" style="width:60px;"></td>
+        <td><input type="text" class="rec-date" value="${data.date || ''}" placeholder="YYYY-MM-DD" style="width:110px;"></td>
+        <td><input type="text" class="rec-title" value="${data.title || ''}" placeholder="Session Title" style="width:100%;"></td>
+        <td><input type="text" class="rec-summary" value="${data.summary || ''}" placeholder="Key events summary" style="width:100%;"></td>
+        <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+async function saveRecapsCollection() {
+    const rows = Array.from(document.querySelectorAll('#maint-recaps-tbody tr'));
+    const records = rows.map((r, idx) => ({
+        id: `recap_${idx + 1}`,
+        session_number: parseInt(r.querySelector('.rec-num')?.value, 10) || (idx + 1),
+        date: r.querySelector('.rec-date')?.value || '',
+        title: r.querySelector('.rec-title')?.value || '',
+        summary: r.querySelector('.rec-summary')?.value || ''
+    })).filter(r => r.title || r.summary);
+
+    try {
+        const res = await fetch('/api/campaign/recaps', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({records})
+        });
+        if (res.ok) showMaintStatus('Session Recaps saved successfully to database.');
+        else throw new Error((await res.json()).error || 'Save failed');
+    } catch (e) {
+        showMaintStatus('Error saving recaps: ' + e.message, true);
+    }
+}
+
+// Check URL query parameter on initial load for mode
+try {
+    const initialMode = new URLSearchParams(window.location.search).get('mode');
+    if (initialMode === 'maintenance') {
+        switchControlMode('maintenance');
+    }
+} catch (e) {}

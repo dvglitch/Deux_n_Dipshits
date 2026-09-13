@@ -1,160 +1,284 @@
     <html>
         <head>
-            <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>DnD Clock — DM Control</title>
+            <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
             <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
             <link rel="stylesheet" href="/static/css/styles.css">
         </head>
         <body class="theme-tavern page-control">
-            <!-- Navigation -->
-            <button id="nav-left" class="nav-btn" onclick="showSlide('prev')" style="position:fixed; top:50%; left:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:0 10px 10px 0; transition: background 0.2s;">&#10094;</button>
-            <button id="nav-right" class="nav-btn" onclick="showSlide('next')" style="position:fixed; top:50%; right:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:10px 0 0 10px; transition: background 0.2s;">&#10095;</button>
-
-            <!-- Cooldown Mode Indicator (Top-Left) -->
-            <div style="position:absolute; top:20px; left:20px; display:flex; align-items:center; gap:10px; z-index:1001;">
-                <span id="cooldownModeLabel" style="font-size:14px; font-weight:bold; color:#d4af37; text-shadow:1px 1px 2px black;">Cooldown Mode</span>
+            <!-- Mode Switcher Tabs -->
+            <div class="mode-switcher-container">
+                <button id="btn-mode-session" class="mode-tab-btn active" onclick="switchControlMode('session')">⚔️ Session Control</button>
+                <button id="btn-mode-maintenance" class="mode-tab-btn" onclick="switchControlMode('maintenance')">📜 Campaign Maintenance</button>
             </div>
 
-            <div class="help-container control-help-container">
-                <div class="help-icon">?</div>
-                <div class="help-tooltip control-help-tooltip">
-                    <h3>Control Page Guide</h3>
-                    <ul>
-                        <li><strong>Mode Toggle (top left)</strong>Green is Timer Mode and red is Cooldown Mode.</li>
-                        <li><strong>Settings Tab</strong>Set theme, sounds, lock controls, quick adjust amount, and default timer values.</li>
-                        <li><strong>Initiative Sync</strong>Assign each combatant an initiative rank and apply timing with one click.</li>
-                        <li><strong>Cooldown Min/Max</strong>In Cooldown Mode, initiative 1 gets min cooldown and the highest initiative gets max cooldown.</li>
-                        <li><strong>Active Combat Tab</strong>Start or pause all timers, reset all, and monitor each combatant in real time.</li>
-                        <li><strong>Compact UI</strong>Collapse extra controls for cleaner table visibility during combat.</li>
-                    </ul>
+            <!-- VIEW 1: SESSION CONTROL -->
+            <div id="view-session-control">
+                <!-- Navigation -->
+                <button id="nav-left" class="nav-btn" onclick="showSlide('prev')" style="position:fixed; top:50%; left:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:0 10px 10px 0; transition: background 0.2s;">&#10094;</button>
+                <button id="nav-right" class="nav-btn" onclick="showSlide('next')" style="position:fixed; top:50%; right:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:10px 0 0 10px; transition: background 0.2s;">&#10095;</button>
+
+                <!-- Help Guide -->
+                <div class="help-container control-help-container">
+                    <div class="help-icon">?</div>
+                    <div class="help-tooltip control-help-tooltip">
+                        <h3>Control Page Guide</h3>
+                        <ul>
+                            <li><strong>Active Combat</strong> Start or pause all timers, reset all, and monitor each combatant in real time.</li>
+                            <li><strong>Settings & Initiative</strong> Set theme, sounds, master lock controls, and apply initiative cooldowns.</li>
+                            <li><strong>Compact UI</strong> Collapse extra controls for cleaner table visibility during combat.</li>
+                        </ul>
+                    </div>
                 </div>
-            </div>
 
-            <h1 style="margin-bottom:30px;">Control Panel</h1>
+                <h1 style="margin-bottom:20px;">Session Control</h1>
 
-            <!-- SLIDE 1: SETUP & INITIATIVE -->
-            <div id="slide-1" class="slide" style="display:none; animation:fadeIn 0.3s; padding-bottom:40px;">
-                <h2 style="margin-bottom:30px;">Settings & Constraints</h2>
-                <div style="display:grid; grid-template-columns:repeat(12, 1fr); gap:40px; justify-items:center; align-items:flex-start; background:#222; padding:30px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.5); width:90%; margin:auto;">
-                    
-                    <!-- Row 1: Themes & Sounds (3 items, 4 cols each) -->
-                    <div style="grid-column: span 4; width:100%;">
-                        <h3 style="margin:0 0 10px 0;">Background Theme</h3>
-                        <select id="themeSelect" onchange="changeTheme()" style="background:#333; color:white; border:1px solid #555; padding:8px 10px; border-radius:5px; font-size:16px; font-family:'Inter', sans-serif; width:100%; box-sizing:border-box;">
-                            <option value="tavern">Tavern Room</option>
-                            <option value="table">Wooden Table</option>
-                            <option value="stone">Stone Floor</option>
-                            <option value="forest">Dark Forest</option>
-                            <option value="dungeon">Dungeon Wall</option>
-                            <option value="parchment">Ancient Parchment</option>
-                        </select>
-                        <div style="margin-top:10px;">
-                            <input id="customBg" type="text" placeholder="Or Image URL..." style="background:#333; color:white; border:1px solid #555; border-radius:5px; padding:8px 10px; width:100%; box-sizing:border-box; margin:0;" onchange="setCustomBg()">
-                        </div>
-                    </div>
-
-                    <div style="grid-column: span 4; width:100%;">
-                        <h3 style="margin:0 0 10px 0;">Timer Done Sound</h3>
-                        <select id="timerSoundSelect" onchange="changeTimerSound()" style="background:#333; color:white; border:1px solid #555; padding:8px 10px; border-radius:5px; font-size:16px; font-family:'Inter', sans-serif; width:100%; box-sizing:border-box;">
-                            <option value="synthetic">Synthetic (Default)</option>
-                        </select>
-                    </div>
-
-                    <div style="grid-column: span 4; width:100%;">
-                        <h3 style="margin:0 0 10px 0;">Hand Raise Sound</h3>
-                        <select id="handSoundSelect" onchange="changeHandSound()" style="background:#333; color:white; border:1px solid #555; padding:8px 10px; border-radius:5px; font-size:16px; font-family:'Inter', sans-serif; width:100%; box-sizing:border-box;">
-                            <option value="synthetic">Synthetic (Default)</option>
-                        </select>
-                    </div>
-
-                    <!-- Row 2: Logic & Controls (4 items, 3 cols each or 3 items, 4 cols each in cooldown mode) -->
-                    <div id="combatants-col" style="grid-column: span 3; width:100%;">
-                        <h3 style="margin:0 0 10px 0;">Combatants</h3>
-                        <button onclick="addTimer()" style="padding:10px 20px; font-weight:bold; background:#1e7f3f; color:white; border:none; border-radius:5px; cursor:pointer; width:100%;">+ Add Timer</button>
-                        <div style="margin-top:10px; font-size:12px; opacity:0.8;">Manage from combat tab</div>
-                    </div>
-
-                    <div id="default-time-col" style="grid-column: span 3; width:100%;">
-                        <h3 style="margin:0 0 10px 0;">Default Time (s)</h3>
-                        <div style="display:flex; gap:5px;">
-                            <input id="allTime" type="number" value="180" style="width:100%; box-sizing:border-box; background:#333; color:white; border:1px solid #555; border-radius:5px; padding:8px;">
-                            <button onclick="setAll()" style="padding:8px 15px; background:#444; border:1px solid #555; color:white; border-radius:5px;">Set</button>
-                        </div>
-                    </div>
-
-                    <div id="master-controls-col" style="grid-column: span 3; width:100%;">
-                        <h3 style="margin:0 0 15px 0;">Master Controls</h3>
-                        <label class="switch">
-                            <input type="checkbox" id="lockToggle1" onchange="toggleLock('lockToggle1')">
-                            <span class="slider"></span>
-                        </label>
-                        <div id="lockLabel1" style="margin-top:10px; font-weight:bold; font-size:14px;">🔓 Unlocked</div>
-                    </div>
-
-                    <div id="quick-adjust-col" style="grid-column: span 3; width:100%;">
-                        <h3 style="margin:0 0 15px 0;">Quick Adjust</h3>
-                        <div style="display:flex; align-items:center; gap:20px; justify-content:center; margin-bottom:10px;">
-                            <div style="display:flex; align-items:center; gap:5px;">
-                                <input id="adjustIntervalInput" type="number" min="1" style="width:60px; padding:5px; background:#333; color:white; border:1px solid #555; border-radius:5px;" onchange="setAdjustInterval()">
-                                <span style="font-size:14px; opacity:0.8;">sec</span>
+                <!-- SLIDE 1: SETUP & INITIATIVE -->
+                <div id="slide-1" class="slide" style="display:none; animation:fadeIn 0.3s; padding-bottom:40px;">
+                    <h2 style="margin-bottom:30px;">Settings & Constraints</h2>
+                    <div style="display:grid; grid-template-columns:repeat(12, 1fr); gap:40px; justify-items:center; align-items:flex-start; background:#222; padding:30px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.5); width:90%; margin:auto;">
+                        
+                        <!-- Row 1: Themes & Sounds (3 items, 4 cols each) -->
+                        <div style="grid-column: span 4; width:100%;">
+                            <h3 style="margin:0 0 10px 0;">Background Theme</h3>
+                            <select id="themeSelect" onchange="changeTheme()" style="background:#333; color:white; border:1px solid #555; padding:8px 10px; border-radius:5px; font-size:16px; font-family:'Inter', sans-serif; width:100%; box-sizing:border-box;">
+                                <option value="tavern">Tavern Room</option>
+                                <option value="table">Wooden Table</option>
+                                <option value="stone">Stone Floor</option>
+                                <option value="forest">Dark Forest</option>
+                                <option value="dungeon">Dungeon Wall</option>
+                                <option value="parchment">Ancient Parchment</option>
+                            </select>
+                            <div style="margin-top:10px;">
+                                <input id="customBg" type="text" placeholder="Or Image URL..." style="background:#333; color:white; border:1px solid #555; border-radius:5px; padding:8px 10px; width:100%; box-sizing:border-box; margin:0;" onchange="setCustomBg()">
                             </div>
-                            <label class="switch" style="margin:0;">
-                                <input type="checkbox" id="adjustLockToggle" onchange="toggleAdjustLock()">
+                        </div>
+
+                        <div style="grid-column: span 4; width:100%;">
+                            <h3 style="margin:0 0 10px 0;">Timer Done Sound</h3>
+                            <select id="timerSoundSelect" onchange="changeTimerSound()" style="background:#333; color:white; border:1px solid #555; padding:8px 10px; border-radius:5px; font-size:16px; font-family:'Inter', sans-serif; width:100%; box-sizing:border-box;">
+                                <option value="synthetic">Synthetic (Default)</option>
+                            </select>
+                        </div>
+
+                        <div style="grid-column: span 4; width:100%;">
+                            <h3 style="margin:0 0 10px 0;">Hand Raise Sound</h3>
+                            <select id="handSoundSelect" onchange="changeHandSound()" style="background:#333; color:white; border:1px solid #555; padding:8px 10px; border-radius:5px; font-size:16px; font-family:'Inter', sans-serif; width:100%; box-sizing:border-box;">
+                                <option value="synthetic">Synthetic (Default)</option>
+                            </select>
+                        </div>
+
+                        <!-- Row 2: Logic & Controls -->
+                        <div id="combatants-col" style="grid-column: span 4; width:100%;">
+                            <h3 style="margin:0 0 10px 0;">Combatants</h3>
+                            <button onclick="addTimer()" style="padding:10px 20px; font-weight:bold; background:#1e7f3f; color:white; border:none; border-radius:5px; cursor:pointer; width:100%;">+ Add Timer</button>
+                            <div style="margin-top:10px; font-size:12px; opacity:0.8;">Manage from combat tab</div>
+                        </div>
+
+                        <div id="master-controls-col" style="grid-column: span 4; width:100%;">
+                            <h3 style="margin:0 0 15px 0;">Master Controls</h3>
+                            <label class="switch">
+                                <input type="checkbox" id="lockToggle1" onchange="toggleLock('lockToggle1')">
+                                <span class="slider"></span>
+                            </label>
+                            <div id="lockLabel1" style="margin-top:10px; font-weight:bold; font-size:14px;">🔓 Unlocked</div>
+                        </div>
+
+                        <div id="quick-adjust-col" style="grid-column: span 4; width:100%;">
+                            <h3 style="margin:0 0 15px 0;">Quick Adjust</h3>
+                            <div style="display:flex; align-items:center; gap:20px; justify-content:center; margin-bottom:10px;">
+                                <div style="display:flex; align-items:center; gap:5px;">
+                                    <input id="adjustIntervalInput" type="number" min="1" style="width:60px; padding:5px; background:#333; color:white; border:1px solid #555; border-radius:5px;" onchange="setAdjustInterval()">
+                                    <span style="font-size:14px; opacity:0.8;">sec</span>
+                                </div>
+                                <label class="switch" style="margin:0;">
+                                    <input type="checkbox" id="adjustLockToggle" onchange="toggleAdjustLock()">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div id="adjustLockLabel" style="font-weight:bold; font-size:14px;">🔓 Unlocked</div>
+                        </div>
+                    </div>
+
+                    <hr style="border:1px solid #444; margin:40px auto; width:80%;">
+
+                    <h2 style="margin-bottom:30px;">Initiative Sync</h2>
+                    <div style="margin-bottom:40px; background:#222; padding:20px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.5); width:80%; margin:auto;">
+                        <div style="display:flex; justify-content:center; gap:20px; align-items:center; flex-wrap:wrap; margin-bottom:20px;">
+                            <div id="init-cooldown-controls" style="display:flex; gap:20px; align-items:center;">
+                                <span style="font-size:14px; opacity:0.8;">Min Cooldown (s):</span>
+                                <input id="initMin" type="number" placeholder="Min (s)" value="60" style="width:90px; padding:8px; background:#333; color:white; border:1px solid #555; border-radius:5px;">
+                                <span style="font-size:14px; opacity:0.8;">Max Cooldown (s):</span>
+                                <input id="initMax" type="number" placeholder="Max (s)" value="120" style="width:90px; padding:8px; background:#333; color:white; border:1px solid #555; border-radius:5px;">
+                            </div>
+                            <button onclick="calculateInitiatives()" style="background:#1e7f3f; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Set Initiatives</button>
+                        </div>                    
+                        <div id="init-list" style="margin-top:30px; display:grid; grid-template-columns:repeat(2, 1fr); gap:15px; text-align:left;"></div>
+                    </div>
+                </div>
+
+                <!-- SLIDE 2: COMBAT -->
+                <div id="slide-2" class="slide" style="display:block; animation:fadeIn 0.3s; padding-bottom:40px;">
+                    <h2 style="margin-bottom:20px;">Active Combat</h2>
+                    <div style="display:flex; justify-content:center; gap:40px; align-items:center; background:#222; padding:15px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.5); width:80%; margin:auto; margin-bottom:30px;">
+                        <div>
+                            <button id="toggleAllBtn" onclick="toggleAll()">▶ Start All</button>
+                            <button onclick="resetAll()">🔄 Reset All</button>
+                        </div>
+                        <div>
+                            <span style="font-weight:bold; margin-right:15px; opacity:0.8;">Compact UI</span>
+                            <label class="switch" style="vertical-align:middle;">
+                                <input type="checkbox" id="compactToggle" onchange="toggleCompact()">
                                 <span class="slider"></span>
                             </label>
                         </div>
-                        <div id="adjustLockLabel" style="font-weight:bold; font-size:14px;">🔓 Unlocked</div>
+                        <div>
+                            <span style="font-weight:bold; margin-right:15px; opacity:0.8;">Master Lock</span>
+                            <label class="switch" style="vertical-align:middle;">
+                                <input type="checkbox" id="lockToggle3" onchange="toggleLock('lockToggle3')">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
                     </div>
-                </div>
 
-                <hr style="border:1px solid #444; margin:40px auto; width:80%;">
-
-                <h2 style="margin-bottom:30px;">Initiative Sync</h2>
-                <div style="margin-bottom:40px; background:#222; padding:20px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.5); width:80%; margin:auto;">
-                    <div style="display:flex; justify-content:center; gap:20px; align-items:center; flex-wrap:wrap; margin-bottom:20px;">
-                        <div id="init-standard-controls" style="display:flex; gap:20px; align-items:center;">
-                            <select id="initMode" style="background:#333; color:white; border:1px solid #555; padding:8px; border-radius:5px; font-family:'Inter', sans-serif;">
-                                <option value="proportional">Proportional (Default Time)</option>
-                                <option value="interval">Interval (Max time becomes Default)</option>
-                            </select>
-                            <input id="initInterval" type="number" placeholder="Interval (s)" value="30" style="width:100px; padding:8px; background:#333; color:white; border:1px solid #555; border-radius:5px;">
-                        </div>
-                        <div id="init-cooldown-controls" style="display:none; gap:20px; align-items:center;">
-                            <span style="font-size:14px; opacity:0.8;">Min Cooldown (s):</span>
-                            <input id="initMin" type="number" placeholder="Min (s)" value="60" style="width:90px; padding:8px; background:#333; color:white; border:1px solid #555; border-radius:5px;">
-                            <span style="font-size:14px; opacity:0.8;">Max Cooldown (s):</span>
-                            <input id="initMax" type="number" placeholder="Max (s)" value="120" style="width:90px; padding:8px; background:#333; color:white; border:1px solid #555; border-radius:5px;">
-                        </div>
-                        <button onclick="calculateInitiatives()" style="background:#1e7f3f; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Set Initiatives</button>
-                    </div>                    
-                    <div id="init-list" style="margin-top:30px; display:grid; grid-template-columns:repeat(2, 1fr); gap:15px; text-align:left;"></div>
+                    <div id="timers" style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px; padding:20px;"></div>
                 </div>
             </div>
 
-            <!-- SLIDE 2: COMBAT -->
-            <div id="slide-2" class="slide" style="display:block; animation:fadeIn 0.3s; padding-bottom:40px;">
-                <h2 style="margin-bottom:20px;">Active Combat</h2>
-                <div style="display:flex; justify-content:center; gap:40px; align-items:center; background:#222; padding:15px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.5); width:80%; margin:auto; margin-bottom:30px;">
-                    <div>
-                        <button id="toggleAllBtn" onclick="toggleAll()">▶ Start All</button>
-                        <button onclick="resetAll()">🔄 Reset All</button>
+            <!-- VIEW 2: CAMPAIGN MAINTENANCE -->
+            <div id="view-campaign-maintenance" style="display:none;">
+                <h1 style="margin-bottom:20px;">Campaign Maintenance</h1>
+                <p style="color:#a09888; margin-bottom:25px;">Manage durable campaign data stored in PostgreSQL / Supabase</p>
+
+                <div class="maint-container">
+                    <div class="maint-subnav">
+                        <button class="maint-subnav-btn active" onclick="showMaintTab('players')">👥 Party Profiles</button>
+                        <button class="maint-subnav-btn" onclick="showMaintTab('spells')">✨ Spellbook</button>
+                        <button class="maint-subnav-btn" onclick="showMaintTab('maps')">🗺️ World Maps</button>
+                        <button class="maint-subnav-btn" onclick="showMaintTab('objectives')">🎯 Objectives</button>
+                        <button class="maint-subnav-btn" onclick="showMaintTab('recaps')">📜 Recaps</button>
                     </div>
-                    <div>
-                        <span style="font-weight:bold; margin-right:15px; opacity:0.8;">Compact UI</span>
-                        <label class="switch" style="vertical-align:middle;">
-                            <input type="checkbox" id="compactToggle" onchange="toggleCompact()">
-                            <span class="slider"></span>
-                        </label>
+
+                    <div id="maint-status" style="display:none; padding:10px; border-radius:6px; margin-bottom:15px; font-weight:bold;"></div>
+
+                    <!-- Panel: Players -->
+                    <div id="maint-panel-players" class="maint-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="margin:0;">Party Profiles</h3>
+                            <div>
+                                <button class="maint-btn-primary" onclick="addPlayerRow()">+ Add Player</button>
+                                <button class="maint-btn-primary" style="background:#2855a7; margin-left:10px;" onclick="savePlayersCollection()">💾 Save Players</button>
+                            </div>
+                        </div>
+                        <table class="maint-table">
+                            <thead>
+                                <tr>
+                                    <th>Player Name</th>
+                                    <th>Character Name</th>
+                                    <th>Max HP</th>
+                                    <th>Default Cooldown (s)</th>
+                                    <th>Accent Color</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="maint-players-tbody"></tbody>
+                        </table>
                     </div>
-                    <div>
-                        <span style="font-weight:bold; margin-right:15px; opacity:0.8;">Master Lock</span>
-                        <label class="switch" style="vertical-align:middle;">
-                            <input type="checkbox" id="lockToggle3" onchange="toggleLock('lockToggle3')">
-                            <span class="slider"></span>
-                        </label>
+
+                    <!-- Panel: Spells -->
+                    <div id="maint-panel-spells" class="maint-panel" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="margin:0;">Spellbook</h3>
+                            <div>
+                                <button class="maint-btn-primary" onclick="addSpellRow()">+ Add Spell</button>
+                                <button class="maint-btn-primary" style="background:#2855a7; margin-left:10px;" onclick="saveSpellsCollection()">💾 Save Spells</button>
+                            </div>
+                        </div>
+                        <table class="maint-table">
+                            <thead>
+                                <tr>
+                                    <th>Spell Name</th>
+                                    <th>Level</th>
+                                    <th>Duration</th>
+                                    <th>Concentration</th>
+                                    <th>Description</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="maint-spells-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Panel: World Maps -->
+                    <div id="maint-panel-maps" class="maint-panel" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="margin:0;">World Maps</h3>
+                            <div>
+                                <button class="maint-btn-primary" onclick="addMapRow()">+ Add Map</button>
+                                <button class="maint-btn-primary" style="background:#2855a7; margin-left:10px;" onclick="saveMapsCollection()">💾 Save Maps</button>
+                            </div>
+                        </div>
+                        <table class="maint-table">
+                            <thead>
+                                <tr>
+                                    <th>Map Title</th>
+                                    <th>Image URL</th>
+                                    <th>Notes</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="maint-maps-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Panel: Objectives -->
+                    <div id="maint-panel-objectives" class="maint-panel" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="margin:0;">Quest Objectives</h3>
+                            <div>
+                                <button class="maint-btn-primary" onclick="addObjectiveRow()">+ Add Objective</button>
+                                <button class="maint-btn-primary" style="background:#2855a7; margin-left:10px;" onclick="saveObjectivesCollection()">💾 Save Objectives</button>
+                            </div>
+                        </div>
+                        <table class="maint-table">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="maint-objectives-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Panel: Recaps -->
+                    <div id="maint-panel-recaps" class="maint-panel" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="margin:0;">Session Recaps</h3>
+                            <div>
+                                <button class="maint-btn-primary" onclick="addRecapRow()">+ Add Recap</button>
+                                <button class="maint-btn-primary" style="background:#2855a7; margin-left:10px;" onclick="saveRecapsCollection()">💾 Save Recaps</button>
+                            </div>
+                        </div>
+                        <table class="maint-table">
+                            <thead>
+                                <tr>
+                                    <th>Session #</th>
+                                    <th>Date</th>
+                                    <th>Title</th>
+                                    <th>Summary</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="maint-recaps-tbody"></tbody>
+                        </table>
                     </div>
                 </div>
-
-                <div id="timers" style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px; padding:20px;"></div>
             </div>
 
             <style>
