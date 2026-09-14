@@ -321,20 +321,7 @@ socket.on("update", (data) => {
 
         div.style.background = bg;
         div.style.border = `4px solid ${accentColor}`;
-        div.style.boxShadow = `0 8px 24px rgba(0,0,0,0.7), 0 0 15px ${accentColor}40`;
-
-        [`toggle-${i}`, `reset-btn-${i}`, `adj-up-${i}`, `adj-down-${i}`, `set-btn-${i}`].forEach(id => {
-            const btn = document.getElementById(id);
-            if (btn) btn.style.background = accentColor;
-        });
-
-        [`name-${i}`, `condition-${i}`, `time-${i}`, `duration-input-${i}`].forEach(id => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.style.background = bg;
-                input.style.borderColor = accentColor;
-            }
-        });
+        div.style.boxShadow = "0 8px 24px rgba(0,0,0,0.7)";
 
         // ✅ Progress Bar Update
         const pct = Math.max(0, Math.min(100, (t.remaining / t.duration) * 100));
