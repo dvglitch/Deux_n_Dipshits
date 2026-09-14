@@ -1,9 +1,10 @@
 {
-    "max_timer_id": 3,
+    "max_timer_id": 4,
     "active_timer_ids": [
         1,
         2,
-        3
+        3,
+        4
     ],
     "locked": false,
     "adjust_locked": false,
@@ -15,52 +16,62 @@
     "timer_durations": {
         "1": 60,
         "2": 60,
-        "3": 60
+        "3": 60,
+        "4": 60
     },
     "timer_cooldown_durations": {
         "1": 60,
         "2": 60,
-        "3": 60
+        "3": 60,
+        "4": 60
     },
     "timer_names": {
         "1": "Thorin",
         "2": "Gandalf",
-        "3": "Goblin Raider"
+        "3": "Goblin Raider",
+        "4": "Goblin Raider"
     },
     "timer_character_names": {
         "1": "Thorin",
         "2": "",
-        "3": ""
+        "3": "",
+        "4": ""
     },
     "timer_show_on_remote": {
         "1": true,
         "2": true,
-        "3": false
+        "3": false,
+        "4": false
     },
     "timer_hp": {
         "1": 18,
         "2": 30,
-        "3": 30
+        "3": 30,
+        "4": 30
     },
     "timer_max_hp": {
         "1": 35,
         "2": 30,
-        "3": 30
+        "3": 30,
+        "4": 30
     },
     "timer_accent_colors": {
         "1": "#3498db",
         "2": "#4a90e2",
-        "3": "#e74c3c"
+        "3": "#e74c3c",
+        "4": "#e74c3c"
     },
     "timer_portraits": {
         "1": "",
         "2": "",
-        "3": ""
+        "3": "",
+        "4": ""
     },
     "timer_is_enemy": {
         "1": false,
         "2": false,
-        "3": true
+        "3": true,
+        "4": true
     },
     "timer_spell_slots": {
         "1": {
@@ -91,7 +102,8 @@
                 "max": 2
             }
         },
-        "3": {}
+        "3": {},
+        "4": {}
     },
     "theme": "forest",
     "custom_bg_url": "",

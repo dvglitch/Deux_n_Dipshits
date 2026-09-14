@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from flask import request
 from ..services.combat_service import CombatService
+from .. import timers as tm
 
 logger = logging.getLogger(__name__)
 
@@ -13,13 +14,15 @@ def register_socket_events(socketio):
 
     @socketio.on("connect")
     def handle_connect():
-        # Send current canonical control state strictly to the connecting client (request.sid)
+        # Send current canonical control state AND live timers strictly to connecting client
         state = CombatService.get_control_state()
         socketio.emit("control_update", state, to=request.sid)
+        socketio.emit("update", tm.get_timer_payload(), to=request.sid)
 
     @socketio.on("start_session")
     def handle_start_session(data=None):
         CombatService.start_session()
+        socketio.emit("update", tm.get_timer_payload())
         socketio.emit("control_update", CombatService.get_control_state())
 
     @socketio.on("toggle_hand")
@@ -27,18 +30,21 @@ def register_socket_events(socketio):
         if not isinstance(data, dict) or "timer" not in data:
             return
         CombatService.toggle_hand(data["timer"])
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_condition")
     def handle_set_condition(data):
         if not isinstance(data, dict) or "timer" not in data:
             return
         CombatService.set_condition(data["timer"], data.get("condition", ""))
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("toggle")
     def handle_toggle(data):
         if not isinstance(data, dict) or "timer" not in data:
             return
         CombatService.toggle_timer(data["timer"])
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("reset")
     def handle_reset(data):
@@ -46,20 +52,24 @@ def register_socket_events(socketio):
             return
         start = bool(data.get("start", False))
         CombatService.reset_timer(data["timer"], start=start)
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_timer_duration")
     def handle_set_timer_duration(data):
         if not isinstance(data, dict) or "timer" not in data or "duration" not in data:
             return
         CombatService.set_timer_duration(data["timer"], data["duration"])
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("toggle_all")
     def handle_toggle_all():
         CombatService.toggle_all_timers()
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("reset_all")
     def handle_reset_all():
         CombatService.reset_all_timers()
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_all_time")
     def handle_set_all_time(data):
@@ -69,6 +79,7 @@ def register_socket_events(socketio):
             seconds = int(data["seconds"])
             new_state = CombatService.update_control_state("DEFAULT_DURATION", seconds)
             socketio.emit("control_update", new_state)
+            socketio.emit("update", tm.get_timer_payload())
         except (ValueError, TypeError):
             logger.warning("Invalid seconds received for set_all_time: %s", data.get("seconds"))
 
@@ -77,6 +88,7 @@ def register_socket_events(socketio):
         if not isinstance(data, dict) or "timer" not in data or "seconds" not in data:
             return
         CombatService.set_timer(data["timer"], data["seconds"])
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("lock_controls")
     def handle_lock_controls(data):
@@ -108,35 +120,41 @@ def register_socket_events(socketio):
         if not isinstance(data, dict) or "timer" not in data or "delta" not in data:
             return
         CombatService.adjust_timer(data["timer"], data["delta"])
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_name")
     def handle_set_name(data):
         if not isinstance(data, dict) or "timer" not in data:
             return
         CombatService.set_timer_name(data["timer"], data.get("name", ""))
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_hp")
     def handle_set_hp(data):
         if not isinstance(data, dict) or "timer" not in data or "current_hp" not in data:
             return
         CombatService.set_hp(data["timer"], data["current_hp"], data.get("max_hp"))
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_spell_slot")
     def handle_set_spell_slot(data):
         if not isinstance(data, dict) or "timer" not in data or "level" not in data or "current" not in data:
             return
         CombatService.set_spell_slot(data["timer"], data["level"], data["current"], data.get("max_slots"))
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("adjust_spell_slot")
     def handle_adjust_spell_slot(data):
         if not isinstance(data, dict) or "timer" not in data or "level" not in data or "delta" not in data:
             return
         CombatService.adjust_spell_slot(data["timer"], data["level"], data["delta"])
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("restore_all_slots")
     def handle_restore_all_slots(data=None):
         timer_id = data.get("timer") if isinstance(data, dict) else None
         CombatService.restore_all_slots(timer_id)
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_timer_meta")
     def handle_set_timer_meta(data):
@@ -149,6 +167,8 @@ def register_socket_events(socketio):
             is_enemy=data.get("is_enemy"),
             character_name=data.get("character_name"),
         )
+        socketio.emit("update", tm.get_timer_payload())
+        socketio.emit("control_update", CombatService.get_control_state())
 
     @socketio.on("set_display_tab")
     def handle_set_display_tab(data):
@@ -176,18 +196,21 @@ def register_socket_events(socketio):
             is_enemy = bool(data.get("is_enemy", False))
             name = data.get("name")
         CombatService.add_timer(is_enemy=is_enemy, name=name)
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("delete_timer")
     def handle_delete_timer(data):
         if not isinstance(data, dict) or "timer" not in data:
             return
         CombatService.delete_timer(data["timer"])
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_timer_visibility")
     def handle_set_timer_visibility(data):
         if not isinstance(data, dict) or "timer" not in data or "show_on_remote" not in data:
             return
         CombatService.set_timer_visibility(data["timer"], data["show_on_remote"])
+        socketio.emit("update", tm.get_timer_payload())
 
     @socketio.on("set_theme")
     def handle_set_theme(data):

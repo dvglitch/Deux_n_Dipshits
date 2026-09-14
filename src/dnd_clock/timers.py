@@ -139,11 +139,8 @@ def sync_with_campaign_profiles(profiles=None, clear_enemies=False):
     return False
 
 def init_timers():
-    """Initialize timers based on active_timer_ids setting or campaign profiles"""
+    """Initialize timers based on saved settings or campaign profiles"""
     global timers, finish_order
-    if sync_with_campaign_profiles(clear_enemies=True):
-        return
-
     settings = load_settings()
     timer_vis = settings.get("timer_show_on_remote", {})
     timer_durs = settings.get("timer_durations", {})
@@ -155,34 +152,40 @@ def init_timers():
     timer_enemies = settings.get("timer_is_enemy", {})
     timer_chars = settings.get("timer_character_names", {})
     timer_slots = settings.get("timer_spell_slots", {})
+    saved_names = settings.get("timer_names", {})
 
-    timers = {
-        i: {
-            "remaining": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
-            "running": False,
-            "last_update": time.time(),
-            "name": settings.get("timer_names", {}).get(str(i), f"Timer {i}"),
-            "character_name": timer_chars.get(str(i), ""),
-            "finished": False,
-            "raised_hand": False,
-            "condition": "",
-            "duration": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
-            "cooldown_duration": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
-            "show_on_remote": timer_vis.get(str(i), True),
-            "current_hp": int(timer_hp.get(str(i), 30)),
-            "max_hp": int(timer_max_hp.get(str(i), 30)),
-            "accent_color": timer_colors.get(str(i), "#d4af37"),
-            "portrait_url": timer_portraits.get(str(i), ""),
-            "is_enemy": bool(timer_enemies.get(str(i), not timer_vis.get(str(i), True))),
-            "spell_slots": timer_slots.get(str(i), {
-                "1": {"current": 4, "max": 4},
-                "2": {"current": 3, "max": 3},
-                "3": {"current": 2, "max": 2}
-            }),
+    active_ids = settings.get("active_timer_ids", [])
+
+    if active_ids and saved_names:
+        timers = {
+            i: {
+                "remaining": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
+                "running": False,
+                "last_update": time.time(),
+                "name": saved_names.get(str(i), f"Timer {i}"),
+                "character_name": timer_chars.get(str(i), ""),
+                "finished": False,
+                "raised_hand": False,
+                "condition": "",
+                "duration": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
+                "cooldown_duration": int(timer_cooldown_durs.get(str(i), timer_durs.get(str(i), DEFAULT_DURATION))),
+                "show_on_remote": timer_vis.get(str(i), True),
+                "current_hp": int(timer_hp.get(str(i), 30)),
+                "max_hp": int(timer_max_hp.get(str(i), 30)),
+                "accent_color": timer_colors.get(str(i), "#d4af37"),
+                "portrait_url": timer_portraits.get(str(i), ""),
+                "is_enemy": bool(timer_enemies.get(str(i), not timer_vis.get(str(i), True))),
+                "spell_slots": timer_slots.get(str(i), {
+                    "1": {"current": 4, "max": 4},
+                    "2": {"current": 3, "max": 3},
+                    "3": {"current": 2, "max": 2}
+                }),
+            }
+            for i in active_ids
         }
-        for i in active_timer_ids
-    }
-    finish_order = []
+        finish_order = []
+    else:
+        sync_with_campaign_profiles(clear_enemies=False)
 
 # Initialize timers on startup
 init_timers()
@@ -329,16 +332,41 @@ def set_timer_meta(timer_id, accent_color=None, portrait_url=None, is_enemy=None
         repo = create_campaign_repository()
         try:
             profiles = repo.load_collection("player_profiles")
-            idx = int(timer_id) - 1
-            if 0 <= idx < len(profiles):
-                if accent_color is not None: profiles[idx]["accent_color"] = str(accent_color)
-                if portrait_url is not None: profiles[idx]["portrait_url"] = str(portrait_url)
-                if character_name is not None: profiles[idx]["character_name"] = str(character_name)
-                repo.save_collection("player_profiles", profiles)
+            target_id = f"player_{timer_id}"
+            found = False
+            for p in profiles:
+                if str(p.get("id")) == target_id or str(p.get("id")) == str(timer_id):
+                    if accent_color is not None: p["accent_color"] = str(accent_color)
+                    if portrait_url is not None: p["portrait_url"] = str(portrait_url)
+                    if character_name is not None: p["character_name"] = str(character_name)
+                    found = True
+                    break
+
+            if not found:
+                idx = int(timer_id) - 1
+                while len(profiles) <= idx:
+                    profiles.append({"id": f"player_{len(profiles) + 1}", "name": f"Player {len(profiles) + 1}"})
+                if 0 <= idx < len(profiles):
+                    if accent_color is not None: profiles[idx]["accent_color"] = str(accent_color)
+                    if portrait_url is not None: profiles[idx]["portrait_url"] = str(portrait_url)
+                    if character_name is not None: profiles[idx]["character_name"] = str(character_name)
+
+            repo.save_collection("player_profiles", profiles)
         finally:
             repo.close()
     except Exception:
         pass
+
+def get_timer_payload():
+    """Return the current serialized payload dictionary for all active timers."""
+    positions = {tid: idx + 1 for idx, tid in enumerate(finish_order)}
+    return {
+        i: {
+            **t,
+            "position": positions.get(i)
+        }
+        for i, t in timers.items()
+    }
 
 def delete_timer(timer_id):
     if timer_id in timers:
