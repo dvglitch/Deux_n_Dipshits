@@ -1,5 +1,7 @@
+import tempfile
 import unittest
 from unittest.mock import patch
+from pathlib import Path
 
 from dnd_clock.app import create_app
 from dnd_clock import timers as tm
@@ -7,6 +9,11 @@ from dnd_clock import timers as tm
 
 class RealtimeSocketTests(unittest.TestCase):
     def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.test_settings_path = Path(self.temp_dir.name) / "test_settings.json"
+        self.settings_patcher = patch("dnd_clock.persistence.SETTINGS_FILE", str(self.test_settings_path))
+        self.settings_patcher.start()
+
         self.app, self.socketio = create_app(start_background_task=False)
         self.client = self.socketio.test_client(self.app)
         # Clear out initial connection messages
@@ -15,6 +22,8 @@ class RealtimeSocketTests(unittest.TestCase):
     def tearDown(self):
         if self.client.is_connected():
             self.client.disconnect()
+        self.settings_patcher.stop()
+        self.temp_dir.cleanup()
 
     def test_connect_receives_control_update(self):
         new_client = self.socketio.test_client(self.app)

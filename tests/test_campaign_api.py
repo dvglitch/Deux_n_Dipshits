@@ -11,6 +11,11 @@ class CampaignApiTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.temp_dir.name) / "test_campaign.db"
+        self.test_settings_path = Path(self.temp_dir.name) / "test_settings.json"
+        
+        self.settings_patcher = patch("dnd_clock.persistence.SETTINGS_FILE", str(self.test_settings_path))
+        self.settings_patcher.start()
+
         self.app, self.socketio = create_app(start_background_task=False)
         self.client = self.app.test_client()
         self.repo_patcher = patch(
@@ -21,6 +26,7 @@ class CampaignApiTests(unittest.TestCase):
 
     def tearDown(self):
         self.repo_patcher.stop()
+        self.settings_patcher.stop()
         self.temp_dir.cleanup()
 
     def test_get_empty_collection(self):
