@@ -276,6 +276,11 @@
                 <strong>Assigned to:</strong> <span id="modal-spell-assigned">All Players</span>
             </div>
 
+            <div id="modal-spell-upcast-container" style="display:none; background:rgba(0,0,0,0.3); padding:10px; border-radius:6px; margin-bottom:12px;">
+                <label style="font-size:13px; font-weight:bold; color:#d4af37; display:block; margin-bottom:6px;">Cast Using Slot Level:</label>
+                <select id="modal-spell-slot-select" onchange="onSpellSlotLevelChange(this.value)" style="width:100%; padding:8px; font-size:14px; background:#111; color:white; border:1px solid #555; border-radius:6px;"></select>
+            </div>
+
             <div style="margin-bottom:18px;">
                 <h4 style="margin:0 0 6px 0; color:#d4af37;">Description & Effects:</h4>
                 <div id="modal-spell-desc" style="font-size:14px; line-height:1.6; color:#ddd; white-space:pre-line;"></div>

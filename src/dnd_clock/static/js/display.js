@@ -98,6 +98,47 @@ function playSound(type) {
     AudioController.play(type);
 }
 
+// Tracks when each timer first hit 0:00 so the finished-red background can hold then fade.
+const finishedSinceByTimer = {};
+const FINISHED_HOLD_SECONDS = 3;
+const FINISHED_FADE_SECONDS = 3;
+
+function hexToRgb(hex) {
+    const clean = hex.replace("#", "");
+    const num = parseInt(clean, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+
+function interpolateColor(hexFrom, hexTo, t) {
+    const from = hexToRgb(hexFrom);
+    const to = hexToRgb(hexTo);
+    const r = Math.round(from.r + (to.r - from.r) * t);
+    const g = Math.round(from.g + (to.g - from.g) * t);
+    const b = Math.round(from.b + (to.b - from.b) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+function getCombatantBackground(timerId, t, runningColor, idleColor, finishedColor) {
+    if (t.remaining > 0) {
+        delete finishedSinceByTimer[timerId];
+        return t.running ? runningColor : idleColor;
+    }
+
+    if (!finishedSinceByTimer[timerId]) {
+        finishedSinceByTimer[timerId] = Date.now();
+    }
+
+    const elapsed = (Date.now() - finishedSinceByTimer[timerId]) / 1000;
+    if (elapsed <= FINISHED_HOLD_SECONDS) {
+        return finishedColor;
+    }
+    if (elapsed >= FINISHED_HOLD_SECONDS + FINISHED_FADE_SECONDS) {
+        return idleColor;
+    }
+    const fadeProgress = (elapsed - FINISHED_HOLD_SECONDS) / FINISHED_FADE_SECONDS;
+    return interpolateColor(finishedColor, idleColor, fadeProgress);
+}
+
 function formatTime(s) {
     let m = Math.floor(s / 60);
     let sec = Math.floor(s % 60);
@@ -550,10 +591,8 @@ socket.on("update", (data) => {
             container.appendChild(div);
         }
 
-        // Card background & color logic
-        let bg = "#383430"; 
-        if (t.running) bg = "#1e7f3f"; 
-        if (t.remaining <= 0) bg = "#a83232"; 
+        // Card background & color logic (finished cards hold red then fade back to idle)
+        const bg = getCombatantBackground(i, t, "#1e7f3f", "#383430", "#a83232");
 
         const pct = Math.max(0, Math.min(100, (t.remaining / t.duration) * 100));
         let pbColor = "#4CAF50"; 

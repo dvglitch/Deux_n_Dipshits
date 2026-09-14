@@ -11,6 +11,47 @@ let prevTimers = {};
 let muteFeedback = localStorage.getItem("mute_dm_feedback") === "true";
 let selectedTimerSound = "synthetic";
 
+// Tracks when each timer first hit 0:00 so the finished-red color can hold then fade.
+const finishedSinceByTimer = {};
+const FINISHED_HOLD_SECONDS = 3;
+const FINISHED_FADE_SECONDS = 3;
+
+function hexToRgb(hex) {
+    const clean = hex.replace("#", "");
+    const num = parseInt(clean, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+
+function interpolateColor(hexFrom, hexTo, t) {
+    const from = hexToRgb(hexFrom);
+    const to = hexToRgb(hexTo);
+    const r = Math.round(from.r + (to.r - from.r) * t);
+    const g = Math.round(from.g + (to.g - from.g) * t);
+    const b = Math.round(from.b + (to.b - from.b) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+function getCombatantBackground(timerId, t, runningColor, idleColor, finishedColor) {
+    if (t.remaining > 0) {
+        delete finishedSinceByTimer[timerId];
+        return t.running ? runningColor : idleColor;
+    }
+
+    if (!finishedSinceByTimer[timerId]) {
+        finishedSinceByTimer[timerId] = Date.now();
+    }
+
+    const elapsed = (Date.now() - finishedSinceByTimer[timerId]) / 1000;
+    if (elapsed <= FINISHED_HOLD_SECONDS) {
+        return finishedColor;
+    }
+    if (elapsed >= FINISHED_HOLD_SECONDS + FINISHED_FADE_SECONDS) {
+        return idleColor;
+    }
+    const fadeProgress = (elapsed - FINISHED_HOLD_SECONDS) / FINISHED_FADE_SECONDS;
+    return interpolateColor(finishedColor, idleColor, fadeProgress);
+}
+
 // Audio Controller for reliable playback
 const AudioController = {
     timerAudio: null,
@@ -377,10 +418,6 @@ function renderTimers() {
         const isExp = (expanded === i);
         if (expanded !== null && !isExp) continue;
 
-        let cardClass = "timer-card";
-        if (t.running) cardClass += " running";
-        if (t.remaining <= 0) cardClass += " finished";
-        
         const timeStr = formatTime(t.remaining);
         const curHp = t.current_hp !== undefined ? t.current_hp : 30;
         const maxHp = t.max_hp !== undefined ? t.max_hp : 30;
@@ -389,14 +426,12 @@ function renderTimers() {
         let card = document.getElementById(`timer-card-${i}`);
         let currentState = card ? card.getAttribute("data-expanded") === "true" : null;
 
-        const accentColor = t.accent_color || "#d4af37";
-
         if (!card || currentState !== isExp) {
             if (card) card.remove();
             card = document.createElement("div");
             card.id = `timer-card-${i}`;
             card.setAttribute("data-expanded", isExp);
-            card.style.border = `4px solid ${accentColor}`;
+            card.className = "timer-card";
             container.appendChild(card);
 
             const badge = isEnemy ? `<span style="background:#e74c3c; color:white; font-size:10px; padding:2px 6px; border-radius:3px; font-weight:bold; margin-left:6px;">ENEMY</span>` : `<span style="background:#2ecc71; color:black; font-size:10px; padding:2px 6px; border-radius:3px; font-weight:bold; margin-left:6px;">PLAYER</span>`;
@@ -443,13 +478,13 @@ function renderTimers() {
 
                         <!-- Condition -->
                         <div style="margin-bottom:12px;">
-                            <input type="text" value="${t.condition || ''}" placeholder="Condition (e.g. Stunned, Poisoned)" onchange="updateCondition(event, ${i}, this.value)" style="width:100%; font-size:13px; text-align:left; box-sizing:border-box;">
+                            <input id="condition-input-${i}" type="text" value="${t.condition || ''}" placeholder="Condition (e.g. Stunned, Poisoned)" onchange="updateCondition(event, ${i}, this.value)" style="width:100%; font-size:13px; text-align:left; box-sizing:border-box;">
                         </div>
 
                         <!-- Timer Controls -->
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
                             <button class="toggle-btn" onclick="toggle(event, ${i})" style="margin:0; width:100%;"></button>
-                            <button onclick="reset(event, ${i})" style="margin:0; width:100%; background:#444;">Reset</button>
+                            <button id="reset-btn-${i}" onclick="reset(event, ${i})" style="margin:0; width:100%;">Reset</button>
                         </div>
 
                         <div class="adj-container" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
@@ -482,11 +517,28 @@ function renderTimers() {
             card.innerHTML = html;
         }
 
-        // Surgical updates
-        card.className = cardClass;
+        // Surgical updates: grey (paused/done), green (running), red for 3s then fade to grey (finished)
+        const bg = getCombatantBackground(i, t, "#1e7f3f", "#383430", "#a83232");
+        const accentColor = getCombatantBackground(i, t, "#2b9952", "#555", "#c44141");
+
+        card.style.background = bg;
         card.style.border = `4px solid ${accentColor}`;
         card.querySelector('.name-disp').textContent = t.name;
         card.querySelector('.time-disp').textContent = timeStr;
+
+        const toggleBtn = card.querySelector('.toggle-btn');
+        if (toggleBtn) toggleBtn.style.background = accentColor;
+
+        [`reset-btn-${i}`, `adj-up-btn-${i}`, `adj-down-btn-${i}`].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.style.background = accentColor;
+        });
+
+        const conditionInput = document.getElementById(`condition-input-${i}`);
+        if (conditionInput) {
+            conditionInput.style.background = bg;
+            conditionInput.style.borderColor = accentColor;
+        }
 
         const hpPct = Math.max(0, Math.min(100, (curHp / Math.max(1, maxHp)) * 100));
         const hpColor = (curHp / Math.max(1, maxHp)) <= 0.25 ? '#e74c3c' : ((curHp / Math.max(1, maxHp)) <= 0.5 ? '#f39c12' : '#2ecc71');
@@ -527,6 +579,11 @@ function renderTimers() {
             if (durInput && document.activeElement !== durInput) {
                 durInput.value = t.duration || 60;
             }
+
+            [`custom-time-input-${i}`, `custom-duration-input-${i}`].forEach(id => {
+                const input = document.getElementById(id);
+                if (input) input.style.borderColor = accentColor;
+            });
 
             const adjUp = document.getElementById(`adj-up-btn-${i}`);
             if (adjUp) {

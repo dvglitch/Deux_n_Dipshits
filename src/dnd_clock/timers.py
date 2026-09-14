@@ -466,11 +466,10 @@ def reset_all_timers():
     finish_order.clear()
 
 def set_timer(timer_id, seconds):
+    """Set the active countdown only; does not change the default reset duration."""
     if timer_id not in timers: return
     t = timers[timer_id]
     t["remaining"] = int(seconds)
-    t["duration"] = int(seconds)
-    t["cooldown_duration"] = int(seconds)
     t["running"] = False
     t["last_update"] = time.time()
 

@@ -6,6 +6,7 @@ let currentRemoteView = "cooldown";
 let locked = false;
 let allSpells = [];
 let currentViewingSpell = null;
+let selectedCastSlotLevel = null;
 
 let prevTimers = {};
 let selectedTimerSound = "synthetic";
@@ -869,54 +870,100 @@ function openSpellDetailModal(spellIndex) {
         }
     }
 
-    const castBtn = document.getElementById("modal-cast-btn");
-    if (castBtn) {
-        if (locked) {
-            castBtn.textContent = "🔒 Actions Locked by DM";
-            castBtn.style.opacity = "0.5";
-            castBtn.style.cursor = "not-allowed";
-            castBtn.style.background = "#555";
-        } else if (resetsTimer) {
-            castBtn.style.opacity = "1";
-            castBtn.style.cursor = "pointer";
-            castBtn.style.background = "#1e7f3f";
-            if (spell.level === 0) {
-                castBtn.textContent = "Cast Cantrip & Reset Cooldown";
-            } else {
-                castBtn.textContent = `Expend Lvl ${spell.level} Slot & Reset Cooldown`;
-            }
-        } else {
-            castBtn.style.opacity = "1";
-            castBtn.style.cursor = "pointer";
-            castBtn.style.background = actionType === 'Reaction' ? '#2980b9' : '#8e44ad';
-            if (spell.level === 0) {
-                castBtn.textContent = `Cast Cantrip (${actionType} - Keeps Cooldown)`;
-            } else {
-                castBtn.textContent = `Expend Lvl ${spell.level} Slot & Cast (${actionType})`;
-            }
-        }
-    }
+    populateSpellSlotSelector(spell);
+    updateCastButtonUI(spell, actionType, resetsTimer);
 
     if (modal) modal.style.display = "flex";
+}
+
+// A level-N spell can be cast using any slot of level N or higher.
+function populateSpellSlotSelector(spell) {
+    const container = document.getElementById("modal-spell-upcast-container");
+    const select = document.getElementById("modal-spell-slot-select");
+    if (!container || !select) return;
+
+    if (!spell.level || spell.level <= 0) {
+        container.style.display = "none";
+        selectedCastSlotLevel = null;
+        return;
+    }
+
+    const t = (selectedTimerId && timers[selectedTimerId]) ? timers[selectedTimerId] : null;
+    const slots = (t && t.spell_slots) || {};
+    const availableLevels = Object.keys(slots)
+        .map(Number)
+        .filter(lvl => lvl >= spell.level)
+        .sort((a, b) => a - b);
+
+    if (availableLevels.length === 0) availableLevels.push(spell.level);
+
+    selectedCastSlotLevel = availableLevels.includes(spell.level) ? spell.level : availableLevels[0];
+
+    select.innerHTML = availableLevels.map(lvl => {
+        const info = slots[String(lvl)] || {};
+        const cur = info.current !== undefined ? info.current : "?";
+        const max = info.max !== undefined ? info.max : "?";
+        const ordinal = lvl === 1 ? "1st" : lvl === 2 ? "2nd" : lvl === 3 ? "3rd" : `${lvl}th`;
+        return `<option value="${lvl}" ${lvl === selectedCastSlotLevel ? "selected" : ""}>${ordinal} Level Slot (${cur}/${max} remaining)</option>`;
+    }).join("");
+
+    container.style.display = "block";
+}
+
+function onSpellSlotLevelChange(value) {
+    selectedCastSlotLevel = Number(value);
+    if (!currentViewingSpell) return;
+    const actionType = currentViewingSpell.action_type || (currentViewingSpell.resets_timer === false ? 'Bonus Action' : 'Action');
+    const resetsTimer = (currentViewingSpell.resets_timer !== false && actionType === 'Action');
+    updateCastButtonUI(currentViewingSpell, actionType, resetsTimer);
+}
+
+function updateCastButtonUI(spell, actionType, resetsTimer) {
+    const castBtn = document.getElementById("modal-cast-btn");
+    if (!castBtn) return;
+
+    const slotLevel = selectedCastSlotLevel || spell.level;
+
+    if (locked) {
+        castBtn.textContent = "🔒 Actions Locked by DM";
+        castBtn.style.opacity = "0.5";
+        castBtn.style.cursor = "not-allowed";
+        castBtn.style.background = "#555";
+        return;
+    }
+
+    castBtn.style.opacity = "1";
+    castBtn.style.cursor = "pointer";
+    castBtn.style.background = resetsTimer ? "#1e7f3f" : (actionType === 'Reaction' ? '#2980b9' : '#8e44ad');
+
+    if (spell.level === 0) {
+        castBtn.textContent = resetsTimer ? "Cast Cantrip & Reset Cooldown" : `Cast Cantrip (${actionType} - Keeps Cooldown)`;
+    } else if (resetsTimer) {
+        castBtn.textContent = `Expend Lvl ${slotLevel} Slot & Reset Cooldown`;
+    } else {
+        castBtn.textContent = `Expend Lvl ${slotLevel} Slot & Cast (${actionType})`;
+    }
 }
 
 function closeSpellDetailModal() {
     const modal = document.getElementById("spell-detail-modal");
     if (modal) modal.style.display = "none";
     currentViewingSpell = null;
+    selectedCastSlotLevel = null;
 }
 
 function castSpellFromModal() {
     if (!currentViewingSpell || locked) return;
     const lvl = currentViewingSpell.level;
+    const slotLevel = selectedCastSlotLevel || lvl;
     const actionType = currentViewingSpell.action_type || (currentViewingSpell.resets_timer === false ? 'Bonus Action' : 'Action');
     const resetsTimer = (currentViewingSpell.resets_timer !== false && actionType === 'Action');
 
-    // Expend slot if level > 0 and player timer is selected
+    // Expend the chosen slot (may be upcast to a higher level than the spell's base level)
     if (lvl > 0 && selectedTimerId) {
         socket.emit("adjust_spell_slot", {
             timer: selectedTimerId,
-            level: String(lvl),
+            level: String(slotLevel),
             delta: -1
         });
     }

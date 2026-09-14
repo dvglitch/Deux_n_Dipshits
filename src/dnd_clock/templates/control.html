@@ -20,8 +20,8 @@
                 <div style="position:fixed; top:20px; right:70px; z-index:1000; display:flex; gap:10px;">
                     <button onclick="confirmResetSession()" style="background:#8b2525; padding:6px 14px; font-size:13px; border-radius:6px; border:1px solid #c82333; cursor:pointer;" title="Start a fresh session: restores player HP and spell slots, clears active enemies and timers">⚡ Start New Session</button>
                 </div>
-                <button id="nav-left" class="nav-btn" onclick="showSlide('prev')" style="position:fixed; top:50%; left:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:0 10px 10px 0; transition: background 0.2s;">&#10094;</button>
-                <button id="nav-right" class="nav-btn" onclick="showSlide('next')" style="position:fixed; top:50%; right:0; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; font-size:40px; padding:20px 10px; cursor:pointer; z-index:1000; border-radius:10px 0 0 10px; transition: background 0.2s;">&#10095;</button>
+                <button id="nav-left" class="nav-btn" onclick="showSlide('prev')" style="position:fixed; top:50%; left:0; transform:translateY(-50%); background:rgba(0,0,0,0.35); color:white; border:none; font-size:22px; padding:12px 6px; cursor:pointer; z-index:1000; border-radius:0 8px 8px 0; opacity:0.5; transition: background 0.2s, opacity 0.2s;">&#10094;</button>
+                <button id="nav-right" class="nav-btn" onclick="showSlide('next')" style="position:fixed; top:50%; right:0; transform:translateY(-50%); background:rgba(0,0,0,0.35); color:white; border:none; font-size:22px; padding:12px 6px; cursor:pointer; z-index:1000; border-radius:8px 0 0 8px; opacity:0.5; transition: background 0.2s, opacity 0.2s;">&#10095;</button>
 
                 <!-- Help Guide -->
                 <div class="help-container control-help-container">
@@ -146,7 +146,7 @@
                         </div>
                     </div>
 
-                    <div id="timers" style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px; padding:20px;"></div>
+                    <div id="timers" style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px; max-width:1400px; margin:0 auto; padding:20px 50px;"></div>
                 </div>
             </div>
 
@@ -339,7 +339,7 @@
 
             <style>
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                .nav-btn:hover { background: rgba(0,0,0,0.8); }
+                .nav-btn:hover { background: rgba(0,0,0,0.8); opacity:1; }
                 .draggable-pin { cursor: grab; user-select: none; }
                 .draggable-pin:active { cursor: grabbing; }
             </style>

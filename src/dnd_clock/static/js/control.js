@@ -1,5 +1,46 @@
 const socket = io();
 
+// Tracks when each timer first hit 0:00 so the finished-red background can hold then fade.
+const finishedSinceByTimer = {};
+const FINISHED_HOLD_SECONDS = 3;
+const FINISHED_FADE_SECONDS = 3;
+
+function hexToRgb(hex) {
+    const clean = hex.replace("#", "");
+    const num = parseInt(clean, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+
+function interpolateColor(hexFrom, hexTo, t) {
+    const from = hexToRgb(hexFrom);
+    const to = hexToRgb(hexTo);
+    const r = Math.round(from.r + (to.r - from.r) * t);
+    const g = Math.round(from.g + (to.g - from.g) * t);
+    const b = Math.round(from.b + (to.b - from.b) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+function getCombatantBackground(timerId, t, runningColor, idleColor, finishedColor) {
+    if (t.remaining > 0) {
+        delete finishedSinceByTimer[timerId];
+        return t.running ? runningColor : idleColor;
+    }
+
+    if (!finishedSinceByTimer[timerId]) {
+        finishedSinceByTimer[timerId] = Date.now();
+    }
+
+    const elapsed = (Date.now() - finishedSinceByTimer[timerId]) / 1000;
+    if (elapsed <= FINISHED_HOLD_SECONDS) {
+        return finishedColor;
+    }
+    if (elapsed >= FINISHED_HOLD_SECONDS + FINISHED_FADE_SECONDS) {
+        return idleColor;
+    }
+    const fadeProgress = (elapsed - FINISHED_HOLD_SECONDS) / FINISHED_FADE_SECONDS;
+    return interpolateColor(finishedColor, idleColor, fadeProgress);
+}
+
 function formatTime(s) {
     let m = Math.floor(s / 60);
     let sec = Math.floor(s % 60);
@@ -170,7 +211,7 @@ socket.on("update", (data) => {
                     <!-- Main Controls -->
                     <div style="display:flex; gap:10px;">
                         <button id="toggle-${i}" style="flex:1; margin:0; font-weight:bold;"></button>
-                        <button onclick="resetTimer(${i})" style="flex:1; margin:0;">Reset</button>
+                        <button id="reset-btn-${i}" onclick="resetTimer(${i})" style="flex:1; margin:0;">Reset</button>
                     </div>
 
                     <!-- Adjustments -->
@@ -182,7 +223,7 @@ socket.on("update", (data) => {
                     <!-- Set custom time -->
                     <div class="hide-on-compact" style="display:flex; gap:10px;">
                         <input id="time-${i}" type="number" placeholder="Seconds" style="flex:2; margin:0; box-sizing:border-box;">
-                        <button onclick="setTimer(${i})" style="flex:1; margin:0;">Set</button>
+                        <button id="set-btn-${i}" onclick="setTimer(${i})" style="flex:1; margin:0;">Set</button>
                     </div>
 
                     <!-- Set per-combatant default duration -->
@@ -274,22 +315,25 @@ socket.on("update", (data) => {
         const toggleBtn = document.getElementById(`toggle-${i}`);
         toggleBtn.innerText = t.running ? "Pause" : "Start";
 
-        // ✅ Color states
-        let bg = "#333";
-        let timerClass = "";
-        
-        if (t.running) {
-            bg = "#1e7f3f";
-            timerClass = "timer-running";
-        } else if (t.remaining <= 0) {
-            bg = "#a83232";
-            timerClass = "timer-finished";
-        }
+        // ✅ Color states: grey (paused/done), green (running), red for 3s then fade to grey (finished)
+        const bg = getCombatantBackground(i, t, "#1e7f3f", "#333", "#a83232");
+        const accentColor = getCombatantBackground(i, t, "#2b9952", "#555", "#c44141");
 
-        const accentColor = t.accent_color || "#d4af37";
         div.style.background = bg;
         div.style.border = `4px solid ${accentColor}`;
-        div.className = timerClass;
+
+        [`toggle-${i}`, `reset-btn-${i}`, `adj-up-${i}`, `adj-down-${i}`, `set-btn-${i}`].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.style.background = accentColor;
+        });
+
+        [`name-${i}`, `condition-${i}`, `time-${i}`, `duration-input-${i}`].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.style.background = bg;
+                input.style.borderColor = accentColor;
+            }
+        });
 
         // ✅ Progress Bar Update
         const pct = Math.max(0, Math.min(100, (t.remaining / t.duration) * 100));
