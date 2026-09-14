@@ -75,7 +75,10 @@ def create_app(start_background_task=True):
 
     @flask_app.route("/api/maps")
     def list_maps():
-        MAPS_ROOT.mkdir(parents=True, exist_ok=True)
+        try:
+            MAPS_ROOT.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
         all_files = set()
         for folder in (MAPS_ROOT, ROOT_STATIC_MAPS):
             if folder.exists():

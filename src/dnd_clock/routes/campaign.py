@@ -137,13 +137,18 @@ def upload_map():
 
     clean_name = re.sub(r"[^a-zA-Z0-9_\.\-]", "_", file.filename)
     maps_dir = Path(__file__).resolve().parents[1] / "static" / "maps"
-    maps_dir.mkdir(parents=True, exist_ok=True)
-    dest = maps_dir / clean_name
 
     try:
+        maps_dir.mkdir(parents=True, exist_ok=True)
+        dest = maps_dir / clean_name
         file.save(str(dest))
         return jsonify({"filename": clean_name, "map_url": f"/static/maps/{clean_name}", "status": "uploaded"})
     except Exception as err:
-        logger.exception("Failed to upload map: %s", err)
-        return jsonify({"error": "Upload failed", "message": str(err)}), 500
+        # Fallback for read-only serverless filesystem (e.g. Vercel Lambda without Supabase bucket)
+        import base64
+        file_bytes = file.read()
+        mime_type = "image/" + ("jpeg" if ext in (".jpg", ".jpeg") else ext.lstrip("."))
+        b64_data = base64.b64encode(file_bytes).decode("utf-8")
+        data_url = f"data:{mime_type};base64,{b64_data}"
+        return jsonify({"filename": clean_name, "map_url": data_url, "status": "uploaded"})
 

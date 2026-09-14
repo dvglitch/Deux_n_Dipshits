@@ -15,7 +15,10 @@ class PortraitStorageService:
     """Handles saving and replacing character portrait images."""
 
     def __init__(self):
-        LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
 
     def save_portrait(self, player_id: str, filename: str, file_bytes: bytes) -> str:
         """Validate, store portrait, and return public/relative URL. Replaces prior image."""
@@ -59,8 +62,8 @@ class PortraitStorageService:
                 pass
 
         # 2. Local filesystem storage fallback
-        # Clean up existing portraits for this player locally
         try:
+            LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
             for existing in LOCAL_UPLOADS_DIR.glob(f"portrait_{safe_player_id}_*"):
                 try:
                     existing.unlink()
