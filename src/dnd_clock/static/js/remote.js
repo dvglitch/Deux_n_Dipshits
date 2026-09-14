@@ -331,7 +331,9 @@ function renderResourcesView() {
         "3": {"current": 2, "max": 2}
     };
 
-    const levels = Object.keys(slots).sort((a, b) => Number(a) - Number(b));
+    const levels = Object.keys(slots)
+        .filter(level => Number(slots[level]?.max || 0) > 0)
+        .sort((a, b) => Number(a) - Number(b));
     if (levels.length === 0) {
         slotsContainer.innerHTML = `<div style="color:#888; font-size:14px; text-align:center;">No spell slots configured.</div>`;
         return;
@@ -593,10 +595,15 @@ function populateSpellSlotSelector(spell) {
     const slots = (t && t.spell_slots) || {};
     const availableLevels = Object.keys(slots)
         .map(Number)
-        .filter(lvl => lvl >= spell.level)
+        .filter(lvl => lvl >= spell.level && Number(slots[String(lvl)]?.max || 0) > 0)
         .sort((a, b) => a - b);
 
-    if (availableLevels.length === 0) availableLevels.push(spell.level);
+    if (availableLevels.length === 0) {
+        selectedCastSlotLevel = null;
+        select.innerHTML = `<option value="">No available slots</option>`;
+        container.style.display = "block";
+        return;
+    }
 
     selectedCastSlotLevel = availableLevels.includes(spell.level) ? spell.level : availableLevels[0];
 
@@ -633,6 +640,14 @@ function updateCastButtonUI(spell, actionType, resetsTimer) {
         return;
     }
 
+    if (spell.level > 0 && selectedCastSlotLevel === null) {
+        castBtn.textContent = "No Available Spell Slots";
+        castBtn.style.opacity = "0.5";
+        castBtn.style.cursor = "not-allowed";
+        castBtn.style.background = "#555";
+        return;
+    }
+
     castBtn.style.opacity = "1";
     castBtn.style.cursor = "pointer";
     castBtn.style.background = resetsTimer ? "#1e7f3f" : (actionType === 'Reaction' ? '#2980b9' : '#8e44ad');
@@ -656,6 +671,7 @@ function closeSpellDetailModal() {
 function castSpellFromModal() {
     if (!currentViewingSpell || locked) return;
     const lvl = currentViewingSpell.level;
+    if (lvl > 0 && selectedCastSlotLevel === null) return;
     const slotLevel = selectedCastSlotLevel || lvl;
     const actionType = currentViewingSpell.action_type || (currentViewingSpell.resets_timer === false ? 'Bonus Action' : 'Action');
     const resetsTimer = (currentViewingSpell.resets_timer !== false && actionType === 'Action');
