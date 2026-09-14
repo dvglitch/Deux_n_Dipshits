@@ -714,12 +714,20 @@ function addPlayerRow(data = {}) {
     if (!tbody) return;
     const tr = document.createElement('tr');
     const pId = data.id || `player_${Date.now()}`;
+    const spellSlots = data.spell_slots_max || {};
     tr.dataset.playerId = pId;
     tr.innerHTML = `
         <td><input type="text" class="p-name" value="${data.name || ''}" placeholder="Player Name" style="width:100%;"></td>
         <td><input type="text" class="p-char" value="${data.character_name || ''}" placeholder="Character Name" style="width:100%;"></td>
         <td><input type="number" class="p-hp" value="${data.max_hp || 30}" style="width:80px;"></td>
         <td><input type="number" class="p-cd" value="${data.default_cooldown || 60}" style="width:90px;"></td>
+        <td>
+            <div style="display:flex; gap:4px; align-items:center;">
+                <input type="number" class="p-slot-1" min="0" max="99" value="${spellSlots['1'] ?? 4}" title="1st level slots" style="width:52px;">
+                <input type="number" class="p-slot-2" min="0" max="99" value="${spellSlots['2'] ?? 3}" title="2nd level slots" style="width:52px;">
+                <input type="number" class="p-slot-3" min="0" max="99" value="${spellSlots['3'] ?? 2}" title="3rd level slots" style="width:52px;">
+            </div>
+        </td>
         <td><input type="color" class="p-color" value="${data.accent_color || '#d4af37'}" style="width:45px; height:36px; padding:0; border:none; cursor:pointer;"></td>
         <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
     `;
@@ -734,6 +742,11 @@ async function savePlayersCollection() {
         character_name: r.querySelector('.p-char')?.value || '',
         max_hp: parseInt(r.querySelector('.p-hp')?.value, 10) || 30,
         default_cooldown: parseInt(r.querySelector('.p-cd')?.value, 10) || 60,
+        spell_slots_max: {
+            "1": Math.max(0, parseInt(r.querySelector('.p-slot-1')?.value, 10) || 0),
+            "2": Math.max(0, parseInt(r.querySelector('.p-slot-2')?.value, 10) || 0),
+            "3": Math.max(0, parseInt(r.querySelector('.p-slot-3')?.value, 10) || 0)
+        },
         accent_color: r.querySelector('.p-color')?.value || '#d4af37'
     })).filter(r => r.name || r.character_name);
 

@@ -118,6 +118,28 @@ def sync_with_campaign_profiles(profiles=None, clear_enemies=False, restore_prog
                 cur_slots = existing.get("spell_slots") or saved_slots.get(key)
                 remaining = existing.get("remaining", saved_durs.get(key, cd))
 
+            configured_slots = p.get("spell_slots_max", {})
+            legacy_slots = p.get("spell_slots", {})
+            default_slots = {"1": 4, "2": 3, "3": 2}
+            slot_maxes = {
+                level: max(0, int(configured_slots.get(level, legacy_slots.get(level, default_slots[level]))))
+                for level in default_slots
+            }
+            if cur_slots:
+                cur_slots = {
+                    level: {
+                        "current": min(max(0, int(info.get("current", 0))), slot_maxes.get(level, int(info.get("max", 0)))),
+                        "max": slot_maxes.get(level, int(info.get("max", 0))),
+                    }
+                    for level, info in cur_slots.items()
+                    if isinstance(info, dict)
+                }
+            else:
+                cur_slots = {
+                    level: {"current": maximum, "max": maximum}
+                    for level, maximum in slot_maxes.items()
+                }
+
             new_timers[idx] = {
                 "remaining": int(remaining),
                 "running": False,
@@ -134,11 +156,7 @@ def sync_with_campaign_profiles(profiles=None, clear_enemies=False, restore_prog
                 "max_hp": max_hp,
                 "accent_color": p.get("accent_color", "#d4af37"),
                 "is_enemy": False,
-                "spell_slots": cur_slots or p.get("spell_slots", {
-                    "1": {"current": 4, "max": 4},
-                    "2": {"current": 3, "max": 3},
-                    "3": {"current": 2, "max": 2}
-                }),
+                "spell_slots": cur_slots,
             }
 
         if current_enemies:
