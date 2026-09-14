@@ -12,8 +12,8 @@
     "adjust_interval": 15,
     "DEFAULT_DURATION": 60,
     "cooldown_mode": true,
-    "display_tab": "timers",
-    "active_map_id": "",
+    "display_tab": "map",
+    "active_map_id": "map_1",
     "timer_durations": {
         "1": 60,
         "2": 60,

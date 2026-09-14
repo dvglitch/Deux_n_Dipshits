@@ -1,7 +1,5 @@
 const socket = io();
 
-let numTimers = 6;
-let dmExclusive = false;
 let prevTimers = {};
 let selectedTimerSound = "synthetic";
 let selectedHandSound = "synthetic";
@@ -148,9 +146,6 @@ function formatTime(s) {
 let activeDisplayTab = "timers";
 
 socket.on("control_update", (data) => {
-    numTimers = data.num_timers || 6;
-    dmExclusive = data.dm_exclusive || false;
-    
     if (data.theme) {
         document.body.className = `theme-${data.theme} page-display`;
     }

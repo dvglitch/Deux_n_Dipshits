@@ -4,7 +4,6 @@ let timers = {};
 let expanded = null;
 let locked = false;
 let adjustLocked = false;
-let numTimers = 6;
 let adjustInterval = 30;
 
 let prevTimers = {};
@@ -305,7 +304,6 @@ socket.on("control_update", (data) => {
     locked = data.locked;
     adjustLocked = data.adjust_locked || false;
     adjustInterval = data.adjust_interval || 30;
-    numTimers = data.num_timers || 6;
     
     if (data.theme) {
         document.body.className = `theme-${data.theme} page-remote`;
