@@ -89,7 +89,7 @@ SUPABASE_URL=https://<PROJECT_REF>.supabase.co
 *(Vercel's Supabase Integration automatically injects `POSTGRES_URL` and `POSTGRES_PRISMA_URL`.)*
 
 ---
-
+ 
 ## Vercel Deployment
 
 This project deploys directly to Vercel via GitHub integration on pushes to `main`.
