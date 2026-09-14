@@ -67,8 +67,14 @@ def save_current_state():
     }
     save_settings(settings)
 
-def sync_with_campaign_profiles(profiles=None, clear_enemies=False):
-    """Sync active timers with saved campaign player profiles (from DB or provided list)."""
+def sync_with_campaign_profiles(profiles=None, clear_enemies=False, restore_progress=False):
+    """Sync active timers with saved campaign player profiles (from DB or provided list).
+
+    When restore_progress is True (cold start), remaining/cooldown/current_hp/spell_slots
+    are pulled from the last saved settings snapshot instead of the (empty) in-memory
+    timers dict, so a fresh process reflects the last known combat progress rather than
+    resetting every player back to full HP/duration.
+    """
     global timers, active_timer_ids, max_timer_id, finish_order
     if profiles is None:
         try:
@@ -88,30 +94,43 @@ def sync_with_campaign_profiles(profiles=None, clear_enemies=False):
                 tid: data for tid, data in timers.items() if data.get("is_enemy", False)
             }
 
+        saved = load_settings() if restore_progress else {}
+        saved_durs = saved.get("timer_cooldown_durations", saved.get("timer_durations", {}))
+        saved_hp = saved.get("timer_hp", {})
+        saved_slots = saved.get("timer_spell_slots", {})
+        saved_conditions = saved.get("timer_conditions", {})
+
         new_timers = {}
         new_active_ids = []
         for idx, p in enumerate(profiles, start=1):
             new_active_ids.append(idx)
             max_hp = int(p.get("max_hp", 30))
             cd = int(p.get("default_cooldown", 60))
-            
+            key = str(idx)
+
             existing = timers.get(idx, {})
-            cur_hp = max_hp if clear_enemies else existing.get("current_hp", max_hp)
-            cur_slots = None if clear_enemies else existing.get("spell_slots")
+            if clear_enemies:
+                cur_hp = max_hp
+                cur_slots = None
+                remaining = cd
+            else:
+                cur_hp = existing.get("current_hp", saved_hp.get(key, max_hp))
+                cur_slots = existing.get("spell_slots") or saved_slots.get(key)
+                remaining = existing.get("remaining", saved_durs.get(key, cd))
 
             new_timers[idx] = {
-                "remaining": cd,
+                "remaining": int(remaining),
                 "running": False,
                 "last_update": time.time(),
                 "name": p.get("name") or f"Player {idx}",
                 "character_name": p.get("character_name", ""),
-                "finished": False,
+                "finished": int(remaining) <= 0,
                 "raised_hand": False,
-                "condition": "",
+                "condition": "" if clear_enemies else saved_conditions.get(key, ""),
                 "duration": cd,
                 "cooldown_duration": cd,
                 "show_on_remote": True,
-                "current_hp": cur_hp,
+                "current_hp": min(int(cur_hp), max_hp),
                 "max_hp": max_hp,
                 "accent_color": p.get("accent_color", "#d4af37"),
                 "portrait_url": p.get("portrait_url", ""),
@@ -139,8 +158,19 @@ def sync_with_campaign_profiles(profiles=None, clear_enemies=False):
     return False
 
 def init_timers():
-    """Initialize timers based on saved settings or campaign profiles"""
+    """Initialize timers on process startup.
+
+    The campaign database is the source of truth for the active roster's identity
+    (names, portraits, colors). It is always checked first so a fresh process
+    (new tab, cold serverless start) never shows placeholder names instead of the
+    real party. Live combat progress (remaining time, HP, spell slots) is restored
+    from the last saved settings snapshot on top of that roster. Settings.json is
+    only used standalone as a fallback when no campaign profiles exist at all.
+    """
     global timers, finish_order
+    if sync_with_campaign_profiles(clear_enemies=False, restore_progress=True):
+        return
+
     settings = load_settings()
     timer_vis = settings.get("timer_show_on_remote", {})
     timer_durs = settings.get("timer_durations", {})
@@ -185,7 +215,8 @@ def init_timers():
         }
         finish_order = []
     else:
-        sync_with_campaign_profiles(clear_enemies=False)
+        timers = {}
+        finish_order = []
 
 # Initialize timers on startup
 init_timers()

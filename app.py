@@ -17,4 +17,6 @@ if __name__ == "__main__":
     print("  Local:   http://localhost:5000")
     print(f"  Network: http://{ip}:5000\n")
 
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
+    # use_reloader=False: the reloader watches settings.json and would restart the
+    # process (wiping in-memory party state) every time a timer mutation saves it.
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)
