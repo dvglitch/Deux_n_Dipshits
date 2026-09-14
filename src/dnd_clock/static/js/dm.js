@@ -517,10 +517,11 @@ function renderTimers() {
 
         // Surgical updates: grey (paused/done), green (running), red for 3s then fade to grey (finished)
         const bg = getCombatantBackground(i, t, "#1e7f3f", "#383430", "#a83232");
-        const accentColor = getCombatantBackground(i, t, "#2b9952", "#555", "#c44141");
+        const accentColor = t.accent_color || "#d4af37";
 
         card.style.background = bg;
         card.style.border = `4px solid ${accentColor}`;
+        card.style.boxShadow = `0 8px 24px rgba(0,0,0,0.7), 0 0 15px ${accentColor}40`;
         card.querySelector('.name-disp').textContent = t.name;
         card.querySelector('.time-disp').textContent = timeStr;
 

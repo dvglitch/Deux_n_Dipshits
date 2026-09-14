@@ -317,10 +317,11 @@ socket.on("update", (data) => {
 
         // ✅ Color states: grey (paused/done), green (running), red for 3s then fade to grey (finished)
         const bg = getCombatantBackground(i, t, "#1e7f3f", "#333", "#a83232");
-        const accentColor = getCombatantBackground(i, t, "#2b9952", "#555", "#c44141");
+        const accentColor = t.accent_color || "#d4af37";
 
         div.style.background = bg;
         div.style.border = `4px solid ${accentColor}`;
+        div.style.boxShadow = `0 8px 24px rgba(0,0,0,0.7), 0 0 15px ${accentColor}40`;
 
         [`toggle-${i}`, `reset-btn-${i}`, `adj-up-${i}`, `adj-down-${i}`, `set-btn-${i}`].forEach(id => {
             const btn = document.getElementById(id);
