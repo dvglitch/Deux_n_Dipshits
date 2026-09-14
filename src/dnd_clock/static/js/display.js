@@ -558,13 +558,13 @@ socket.on("update", (data) => {
         if (pct <= 20) pbColor = "#e74c3c"; 
 
         const accentColor = t.accent_color || "#d4af37";
-        let boxShadow = `0 6px 15px rgba(0,0,0,0.6), inset 0 0 0 2px ${accentColor}40`;
+        let boxShadow = `0 8px 24px rgba(0,0,0,0.7), inset 0 0 0 3px ${accentColor}60, 0 0 15px ${accentColor}30`;
         if (t.raised_hand) {
             boxShadow = `inset 0 0 50px 10px rgba(255, 215, 0, 0.5), inset 0 0 20px 5px rgba(255, 215, 0, 0.8), ${boxShadow}`;
         }
 
         div.style.background = bg;
-        div.style.border = `2px solid ${accentColor}80`;
+        div.style.border = `4px solid ${accentColor}`;
         div.style.boxShadow = boxShadow;
 
         document.getElementById(`disp-name-${i}`).innerText = t.name || ("Player " + i);

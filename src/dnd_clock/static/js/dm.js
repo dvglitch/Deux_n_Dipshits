@@ -389,11 +389,14 @@ function renderTimers() {
         let card = document.getElementById(`timer-card-${i}`);
         let currentState = card ? card.getAttribute("data-expanded") === "true" : null;
 
+        const accentColor = t.accent_color || "#d4af37";
+
         if (!card || currentState !== isExp) {
             if (card) card.remove();
             card = document.createElement("div");
             card.id = `timer-card-${i}`;
             card.setAttribute("data-expanded", isExp);
+            card.style.border = `4px solid ${accentColor}`;
             container.appendChild(card);
 
             const badge = isEnemy ? `<span style="background:#e74c3c; color:white; font-size:10px; padding:2px 6px; border-radius:3px; font-weight:bold; margin-left:6px;">ENEMY</span>` : `<span style="background:#2ecc71; color:black; font-size:10px; padding:2px 6px; border-radius:3px; font-weight:bold; margin-left:6px;">PLAYER</span>`;
@@ -481,6 +484,7 @@ function renderTimers() {
 
         // Surgical updates
         card.className = cardClass;
+        card.style.border = `4px solid ${accentColor}`;
         card.querySelector('.name-disp').textContent = t.name;
         card.querySelector('.time-disp').textContent = timeStr;
 

@@ -106,13 +106,15 @@ def upload_portrait():
     try:
         service = PortraitStorageService()
         file_bytes = file.read()
+        if not file_bytes:
+            return jsonify({"error": "Uploaded file is empty"}), 400
         portrait_url = service.save_portrait(player_id, file.filename, file_bytes)
         return jsonify({"player_id": player_id, "portrait_url": portrait_url, "status": "uploaded"})
     except ValueError as val_err:
         return jsonify({"error": str(val_err)}), 400
     except Exception as err:
         logger.exception("Failed to upload portrait for %s: %s", player_id, err)
-        return jsonify({"error": "Upload failed", "message": str(err)}), 500
+        return jsonify({"error": f"Upload failed: {str(err)}", "message": str(err)}), 500
 
 
 @campaign_bp.post("/upload_map")

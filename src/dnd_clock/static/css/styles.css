@@ -95,11 +95,22 @@ body.theme-parchment {
 input:checked + .slider { background-color: #f44336; }
 input:checked + .slider:before { transform: translateX(26px); }
 /* Remote Page specific */
-.timer-card { padding: 15px 20px; border-radius: 12px; margin-bottom: 15px; background: linear-gradient(145deg, #3a3a3a, #2a2a2a); border: 1px solid rgba(255, 255, 255, 0.08); cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 10px 20px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1); }
+.timer-card { padding: 15px 20px; border-radius: 12px; margin-bottom: 15px; background: linear-gradient(145deg, #3a3a3a, #2a2a2a); border: 3px solid rgba(255, 255, 255, 0.15); cursor: pointer; transition: background-color 15s ease, background 15s ease, border-color 0.3s ease, transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 10px 20px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1); }
 .timer-card button { padding: 15px 20px; font-size: 18px; }
 .timer-card:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.15); }
-.timer-card.running { background: linear-gradient(145deg, #1e7f3f, #155e2d); border-color: rgba(255,255,255,0.15); }
-.timer-card.finished { background: linear-gradient(145deg, #a83232, #7c2222); border-color: rgba(255,255,255,0.15); }
+.timer-card.running { background: linear-gradient(145deg, #1e7f3f, #155e2d); border-color: rgba(255,255,255,0.25); }
+.timer-card.finished { background: linear-gradient(145deg, #a83232, #7c2222); border-color: rgba(255,255,255,0.25); animation: fadeFromRed 15s forwards; }
+
+@keyframes fadeFromRed {
+    0% {
+        background-color: #a83232;
+        background-image: linear-gradient(145deg, #a83232, #7c2222);
+    }
+    100% {
+        background-color: #383430;
+        background-image: linear-gradient(145deg, #383430, #2a2a2a);
+    }
+}
 .timer-header { display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: bold; }
 .timer-body { margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(0,0,0,0.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05); }
 

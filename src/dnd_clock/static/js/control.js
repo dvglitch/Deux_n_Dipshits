@@ -286,7 +286,9 @@ socket.on("update", (data) => {
             timerClass = "timer-finished";
         }
 
+        const accentColor = t.accent_color || "#d4af37";
         div.style.background = bg;
+        div.style.border = `4px solid ${accentColor}`;
         div.className = timerClass;
 
         // ✅ Progress Bar Update

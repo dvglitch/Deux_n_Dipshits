@@ -60,12 +60,20 @@ class PortraitStorageService:
 
         # 2. Local filesystem storage fallback
         # Clean up existing portraits for this player locally
-        for existing in LOCAL_UPLOADS_DIR.glob(f"portrait_{safe_player_id}_*"):
-            try:
-                existing.unlink()
-            except OSError:
-                pass
+        try:
+            for existing in LOCAL_UPLOADS_DIR.glob(f"portrait_{safe_player_id}_*"):
+                try:
+                    existing.unlink()
+                except OSError:
+                    pass
 
-        dest_path = LOCAL_UPLOADS_DIR / unique_name
-        dest_path.write_bytes(file_bytes)
-        return f"/static/images/portraits/{unique_name}"
+            dest_path = LOCAL_UPLOADS_DIR / unique_name
+            dest_path.write_bytes(file_bytes)
+            return f"/static/images/portraits/{unique_name}"
+        except Exception as e:
+            # If server filesystem is read-only (e.g. Vercel Lambda without Supabase Key),
+            # convert image to a compact data URI so upload always succeeds!
+            import base64
+            mime_type = "image/" + ("jpeg" if ext in (".jpg", ".jpeg") else ext.lstrip("."))
+            b64_data = base64.b64encode(file_bytes).decode("utf-8")
+            return f"data:{mime_type};base64,{b64_data}"

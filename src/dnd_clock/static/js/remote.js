@@ -212,8 +212,8 @@ function renderActiveCooldownView() {
 
     const accentColor = t.accent_color || "#d4af37";
     if (card) {
-        card.style.borderColor = accentColor;
-        card.style.boxShadow = `0 10px 30px rgba(0,0,0,0.7), inset 0 0 0 1px ${accentColor}40`;
+        card.style.border = `4px solid ${accentColor}`;
+        card.style.boxShadow = `0 10px 30px rgba(0,0,0,0.8), 0 0 15px ${accentColor}40`;
     }
 
     if (nameEl) nameEl.textContent = t.name;
