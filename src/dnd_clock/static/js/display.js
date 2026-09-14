@@ -548,9 +548,8 @@ socket.on("update", (data) => {
             `;
 
             div.innerHTML = `
-                <!-- Top-Left Icon Container (Portrait & Raised Hand) -->
+                <!-- Top-Left Raised Hand Icon -->
                 <div style="position:absolute; top:-11.5px; left:-11.5px; display:flex; align-items:center; gap:8px; z-index:5; pointer-events:none;">
-                    <img id="disp-portrait-${i}" src="" alt="Portrait" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid #d4af37; display:none; box-shadow:0 4px 10px rgba(0,0,0,0.8); background:#111;">
                     <span id="disp-hand-icon-${i}" style="display:none; font-size:26px; filter:drop-shadow(0 2px 5px black); animation:bounceHand 1s infinite alternate;">✋</span>
                 </div>
 
@@ -612,15 +611,6 @@ socket.on("update", (data) => {
             charEl.style.display = "block";
         } else {
             charEl.style.display = "none";
-        }
-
-        const portraitEl = document.getElementById(`disp-portrait-${i}`);
-        if (t.portrait_url) {
-            portraitEl.src = t.portrait_url;
-            portraitEl.style.display = "block";
-            portraitEl.style.borderColor = accentColor;
-        } else {
-            portraitEl.style.display = "none";
         }
 
         const handIconEl = document.getElementById(`disp-hand-icon-${i}`);

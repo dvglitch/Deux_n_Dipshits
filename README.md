@@ -85,7 +85,6 @@ Configure these in your local `.env` and in Vercel Project Settings:
 ```env
 DATABASE_URL=postgresql://postgres:<PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres
 SUPABASE_URL=https://<PROJECT_REF>.supabase.co
-SUPABASE_STORAGE_BUCKET=player-portraits
 ```
 *(Vercel's Supabase Integration automatically injects `POSTGRES_URL` and `POSTGRES_PRISMA_URL`.)*
 

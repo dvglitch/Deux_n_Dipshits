@@ -1,7 +1,5 @@
-import io
 import unittest
-from dnd_clock.domain.roster import RosterManager, MAX_ACTIVE_ROSTER, MAX_PORTRAIT_BYTES
-from dnd_clock.services.portrait_service import PortraitStorageService
+from dnd_clock.domain.roster import RosterManager, MAX_ACTIVE_ROSTER
 
 
 class RosterManagerTests(unittest.TestCase):
@@ -36,30 +34,6 @@ class RosterManagerTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             RosterManager.set_active_roster(permanent, active_ids, guests)
-
-    def test_portrait_validation_rejects_invalid_extension(self):
-        with self.assertRaises(ValueError) as ctx:
-            RosterManager.validate_portrait("malicious.exe", b"fake content")
-        self.assertIn("Unsupported image type", str(ctx.exception))
-
-    def test_portrait_validation_rejects_oversized_file(self):
-        large_bytes = b"x" * (MAX_PORTRAIT_BYTES + 10)
-        with self.assertRaises(ValueError) as ctx:
-            RosterManager.validate_portrait("photo.png", large_bytes)
-        self.assertIn("exceeds max size", str(ctx.exception))
-
-    def test_portrait_storage_local_save(self):
-        service = PortraitStorageService()
-        url = service.save_portrait("player_1", "test.png", b"\x89PNG\r\n\x1a\nfakeimagecontent")
-        self.assertTrue(url.startswith("/static/images/portraits/portrait_player_1_"))
-        self.assertTrue(url.endswith(".png"))
-        # Clean up created test file
-        from dnd_clock.services.portrait_service import LOCAL_UPLOADS_DIR
-        for p in LOCAL_UPLOADS_DIR.glob("portrait_player_1_*"):
-            try:
-                p.unlink()
-            except OSError:
-                pass
 
 
 if __name__ == "__main__":

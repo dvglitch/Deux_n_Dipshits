@@ -163,7 +163,6 @@ def register_socket_events(socketio):
         CombatService.set_timer_meta(
             data["timer"],
             accent_color=data.get("accent_color"),
-            portrait_url=data.get("portrait_url"),
             is_enemy=data.get("is_enemy"),
             character_name=data.get("character_name"),
         )

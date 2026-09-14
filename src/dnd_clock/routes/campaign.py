@@ -12,6 +12,15 @@ campaign_bp = Blueprint("campaign", __name__, url_prefix="/api/campaign")
 VALID_COLLECTIONS = {"player_profiles", "spells", "world_maps", "objectives", "recaps"}
 
 
+def _remove_legacy_portrait_fields(collection, records):
+    if collection != "player_profiles":
+        return records
+    return [
+        {key: value for key, value in record.items() if key != "portrait_url"}
+        for record in records
+    ]
+
+
 @campaign_bp.get("/<collection>")
 def get_collection(collection: str):
     if collection not in VALID_COLLECTIONS:
@@ -20,7 +29,7 @@ def get_collection(collection: str):
     repo = None
     try:
         repo = create_campaign_repository()
-        records = repo.load_collection(collection)
+        records = _remove_legacy_portrait_fields(collection, repo.load_collection(collection))
         return jsonify({"collection": collection, "records": records})
     except (RepositoryError, Exception) as err:
         logger.exception("Failed to load collection %s: %s", collection, err)
@@ -46,8 +55,10 @@ def save_collection(collection: str):
     repo = None
     try:
         repo = create_campaign_repository()
-        repo.save_collection(collection, data["records"])
+        records = _remove_legacy_portrait_fields(collection, data["records"])
+        repo.save_collection(collection, records)
         saved_records = repo.load_collection(collection)
+        saved_records = _remove_legacy_portrait_fields(collection, saved_records)
         return jsonify({"collection": collection, "records": saved_records, "status": "saved"})
     except (RepositoryError, Exception) as err:
         logger.exception("Failed to save collection %s: %s", collection, err)
@@ -79,36 +90,6 @@ def delete_collection(collection: str):
                 repo.close()
             except Exception:
                 pass
-
-
-@campaign_bp.post("/upload_portrait")
-def upload_portrait():
-    """Upload a character portrait image for a player."""
-    from ..services.portrait_service import PortraitStorageService
-
-    player_id = request.form.get("player_id", "").strip()
-    if not player_id:
-        return jsonify({"error": "player_id is required"}), 400
-
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-
-    file = request.files["file"]
-    if not file or not file.filename:
-        return jsonify({"error": "Empty or invalid file"}), 400
-
-    try:
-        service = PortraitStorageService()
-        file_bytes = file.read()
-        if not file_bytes:
-            return jsonify({"error": "Uploaded file is empty"}), 400
-        portrait_url = service.save_portrait(player_id, file.filename, file_bytes)
-        return jsonify({"player_id": player_id, "portrait_url": portrait_url, "status": "uploaded"})
-    except ValueError as val_err:
-        return jsonify({"error": str(val_err)}), 400
-    except Exception as err:
-        logger.exception("Failed to upload portrait for %s: %s", player_id, err)
-        return jsonify({"error": f"Upload failed: {str(err)}", "message": str(err)}), 500
 
 
 @campaign_bp.post("/upload_map")

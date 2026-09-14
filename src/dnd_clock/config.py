@@ -81,5 +81,3 @@ def supabase_url() -> str | None:
     return os.getenv("SUPABASE_URL")
 
 
-def storage_bucket() -> str:
-    return os.getenv("SUPABASE_STORAGE_BUCKET", "player-portraits")

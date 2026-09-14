@@ -715,52 +715,15 @@ function addPlayerRow(data = {}) {
     const tr = document.createElement('tr');
     const pId = data.id || `player_${Date.now()}`;
     tr.dataset.playerId = pId;
-    tr.dataset.portraitUrl = data.portrait_url || '';
     tr.innerHTML = `
         <td><input type="text" class="p-name" value="${data.name || ''}" placeholder="Player Name" style="width:100%;"></td>
         <td><input type="text" class="p-char" value="${data.character_name || ''}" placeholder="Character Name" style="width:100%;"></td>
         <td><input type="number" class="p-hp" value="${data.max_hp || 30}" style="width:80px;"></td>
         <td><input type="number" class="p-cd" value="${data.default_cooldown || 60}" style="width:90px;"></td>
         <td><input type="color" class="p-color" value="${data.accent_color || '#d4af37'}" style="width:45px; height:36px; padding:0; border:none; cursor:pointer;"></td>
-        <td>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <input type="file" class="p-file" accept="image/*" style="display:none;" onchange="handlePortraitUpload(this, '${pId}')">
-                <button type="button" class="maint-btn-primary" style="padding:4px 8px; font-size:12px;" onclick="this.previousElementSibling.click()">Upload</button>
-                <span class="p-portrait-status" style="font-size:12px; opacity:0.8;">${data.portrait_url ? '✓ Attached' : 'None'}</span>
-            </div>
-        </td>
         <td><button class="maint-btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
     `;
     tbody.appendChild(tr);
-}
-
-async function handlePortraitUpload(input, playerId) {
-    if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
-    const formData = new FormData();
-    formData.append('player_id', playerId);
-    formData.append('file', file);
-
-    const statusSpan = input.closest('td').querySelector('.p-portrait-status');
-    if (statusSpan) statusSpan.textContent = 'Uploading...';
-
-    try {
-        const res = await fetch('/api/campaign/upload_portrait', {
-            method: 'POST',
-            body: formData
-        });
-        const result = await res.json();
-        if (res.ok) {
-            input.closest('tr').dataset.portraitUrl = result.portrait_url;
-            if (statusSpan) statusSpan.textContent = '✓ Attached';
-            showMaintStatus(`Portrait uploaded successfully for ${playerId}`);
-        } else {
-            throw new Error(result.error || 'Upload failed');
-        }
-    } catch (e) {
-        if (statusSpan) statusSpan.textContent = 'Failed';
-        showMaintStatus('Portrait upload error: ' + e.message, true);
-    }
 }
 
 async function savePlayersCollection() {
@@ -771,8 +734,7 @@ async function savePlayersCollection() {
         character_name: r.querySelector('.p-char')?.value || '',
         max_hp: parseInt(r.querySelector('.p-hp')?.value, 10) || 30,
         default_cooldown: parseInt(r.querySelector('.p-cd')?.value, 10) || 60,
-        accent_color: r.querySelector('.p-color')?.value || '#d4af37',
-        portrait_url: r.dataset.portraitUrl || ''
+        accent_color: r.querySelector('.p-color')?.value || '#d4af37'
     })).filter(r => r.name || r.character_name);
 
     try {

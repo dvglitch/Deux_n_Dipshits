@@ -147,7 +147,6 @@ class CombatService:
     def set_timer_meta(
         timer_id_raw: Any,
         accent_color: Optional[str] = None,
-        portrait_url: Optional[str] = None,
         is_enemy: Optional[bool] = None,
         character_name: Optional[str] = None,
     ) -> bool:
@@ -157,7 +156,6 @@ class CombatService:
         tm.set_timer_meta(
             timer_id,
             accent_color=accent_color,
-            portrait_url=portrait_url,
             is_enemy=is_enemy,
             character_name=character_name,
         )

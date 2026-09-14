@@ -23,6 +23,7 @@ active_timer_ids = settings.get("active_timer_ids", list(range(1, max_timer_id +
 timers = {}
 finish_order = []
 
+
 control_state = {
     "locked": locked,
     "adjust_locked": adjust_locked,
@@ -57,7 +58,6 @@ def save_current_state():
         "timer_hp": {str(k): v.get("current_hp", 30) for k, v in timers.items()},
         "timer_max_hp": {str(k): v.get("max_hp", 30) for k, v in timers.items()},
         "timer_accent_colors": {str(k): v.get("accent_color", "#d4af37") for k, v in timers.items()},
-        "timer_portraits": {str(k): v.get("portrait_url", "") for k, v in timers.items()},
         "timer_is_enemy": {str(k): v.get("is_enemy", False) for k, v in timers.items()},
         "timer_spell_slots": {str(k): v.get("spell_slots", {}) for k, v in timers.items()},
         "theme": theme,
@@ -133,7 +133,6 @@ def sync_with_campaign_profiles(profiles=None, clear_enemies=False, restore_prog
                 "current_hp": min(int(cur_hp), max_hp),
                 "max_hp": max_hp,
                 "accent_color": p.get("accent_color", "#d4af37"),
-                "portrait_url": p.get("portrait_url", ""),
                 "is_enemy": False,
                 "spell_slots": cur_slots or p.get("spell_slots", {
                     "1": {"current": 4, "max": 4},
@@ -161,7 +160,7 @@ def init_timers():
     """Initialize timers on process startup.
 
     The campaign database is the source of truth for the active roster's identity
-    (names, portraits, colors). It is always checked first so a fresh process
+    (names, colors). It is always checked first so a fresh process
     (new tab, cold serverless start) never shows placeholder names instead of the
     real party. Live combat progress (remaining time, HP, spell slots) is restored
     from the last saved settings snapshot on top of that roster. Settings.json is
@@ -178,7 +177,6 @@ def init_timers():
     timer_hp = settings.get("timer_hp", {})
     timer_max_hp = settings.get("timer_max_hp", {})
     timer_colors = settings.get("timer_accent_colors", {})
-    timer_portraits = settings.get("timer_portraits", {})
     timer_enemies = settings.get("timer_is_enemy", {})
     timer_chars = settings.get("timer_character_names", {})
     timer_slots = settings.get("timer_spell_slots", {})
@@ -203,7 +201,6 @@ def init_timers():
                 "current_hp": int(timer_hp.get(str(i), 30)),
                 "max_hp": int(timer_max_hp.get(str(i), 30)),
                 "accent_color": timer_colors.get(str(i), "#d4af37"),
-                "portrait_url": timer_portraits.get(str(i), ""),
                 "is_enemy": bool(timer_enemies.get(str(i), not timer_vis.get(str(i), True))),
                 "spell_slots": timer_slots.get(str(i), {
                     "1": {"current": 4, "max": 4},
@@ -291,7 +288,6 @@ def add_timer(is_enemy=False, name=None):
         "current_hp": 30,
         "max_hp": 30,
         "accent_color": "#e74c3c" if is_enemy else "#d4af37",
-        "portrait_url": "",
         "is_enemy": bool(is_enemy),
     }
     save_current_state()
@@ -346,18 +342,17 @@ def restore_all_slots(timer_id=None):
                 t["spell_slots"][lvl_str]["current"] = t["spell_slots"][lvl_str].get("max", 4)
     save_current_state()
 
-def set_timer_meta(timer_id, accent_color=None, portrait_url=None, is_enemy=None, character_name=None):
+def set_timer_meta(timer_id, accent_color=None, is_enemy=None, character_name=None):
     if timer_id not in timers: return
     t = timers[timer_id]
     if accent_color is not None: t["accent_color"] = str(accent_color)
-    if portrait_url is not None: t["portrait_url"] = str(portrait_url)
     if is_enemy is not None:
         t["is_enemy"] = bool(is_enemy)
         t["show_on_remote"] = not bool(is_enemy)
     if character_name is not None: t["character_name"] = str(character_name)
     save_current_state()
 
-    # Attempt to persist updated portrait/color/character_name to campaign database
+    # Attempt to persist updated color/character_name to campaign database
     try:
         from .database.factory import create_campaign_repository
         repo = create_campaign_repository()
@@ -368,7 +363,6 @@ def set_timer_meta(timer_id, accent_color=None, portrait_url=None, is_enemy=None
             for p in profiles:
                 if str(p.get("id")) == target_id or str(p.get("id")) == str(timer_id):
                     if accent_color is not None: p["accent_color"] = str(accent_color)
-                    if portrait_url is not None: p["portrait_url"] = str(portrait_url)
                     if character_name is not None: p["character_name"] = str(character_name)
                     found = True
                     break
@@ -379,7 +373,6 @@ def set_timer_meta(timer_id, accent_color=None, portrait_url=None, is_enemy=None
                     profiles.append({"id": f"player_{len(profiles) + 1}", "name": f"Player {len(profiles) + 1}"})
                 if 0 <= idx < len(profiles):
                     if accent_color is not None: profiles[idx]["accent_color"] = str(accent_color)
-                    if portrait_url is not None: profiles[idx]["portrait_url"] = str(portrait_url)
                     if character_name is not None: profiles[idx]["character_name"] = str(character_name)
 
             repo.save_collection("player_profiles", profiles)

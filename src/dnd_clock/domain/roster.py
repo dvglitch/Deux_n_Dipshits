@@ -1,11 +1,8 @@
 """Roster and player profile domain models and lifecycle logic."""
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
-import re
 
 MAX_ACTIVE_ROSTER = 9
-ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-MAX_PORTRAIT_BYTES = 2 * 1024 * 1024  # 2MB limit
 
 
 @dataclass
@@ -16,7 +13,6 @@ class PlayerProfile:
     max_hp: int = 30
     default_cooldown: int = 60
     accent_color: str = "#d4af37"
-    portrait_url: str = ""
     is_guest: bool = False
     notes: str = ""
     spell_slots_max: Dict[str, int] = field(default_factory=dict)
@@ -28,16 +24,6 @@ class PlayerProfile:
 
 class RosterManager:
     """Manages active session roster with max 9 profile cap, guest handling, and inactive filtering."""
-
-    @staticmethod
-    def validate_portrait(filename: str, file_bytes: bytes) -> None:
-        if not filename or "." not in filename:
-            raise ValueError("Invalid filename")
-        ext = "." + filename.rsplit(".", 1)[1].lower()
-        if ext not in ALLOWED_IMAGE_EXTENSIONS:
-            raise ValueError(f"Unsupported image type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_IMAGE_EXTENSIONS))}")
-        if len(file_bytes) > MAX_PORTRAIT_BYTES:
-            raise ValueError(f"Image exceeds max size of {MAX_PORTRAIT_BYTES // (1024 * 1024)}MB")
 
     @staticmethod
     def set_active_roster(
