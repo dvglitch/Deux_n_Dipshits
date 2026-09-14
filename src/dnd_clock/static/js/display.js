@@ -513,12 +513,12 @@ socket.on("update", (data) => {
 
             div.innerHTML = `
                 <!-- Top-Left Icon Container (Portrait & Raised Hand) -->
-                <div style="position:absolute; top:12px; left:12px; display:flex; align-items:center; gap:8px; z-index:5;">
-                    <img id="disp-portrait-${i}" src="" alt="Portrait" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:3px solid #d4af37; display:none; box-shadow:0 4px 10px rgba(0,0,0,0.8); background:#111;">
+                <div style="position:absolute; top:-11.5px; left:-11.5px; display:flex; align-items:center; gap:8px; z-index:5; pointer-events:none;">
+                    <img id="disp-portrait-${i}" src="" alt="Portrait" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid #d4af37; display:none; box-shadow:0 4px 10px rgba(0,0,0,0.8); background:#111;">
                     <span id="disp-hand-icon-${i}" style="display:none; font-size:26px; filter:drop-shadow(0 2px 5px black); animation:bounceHand 1s infinite alternate;">✋</span>
                 </div>
 
-                <div style="text-align:center; margin-bottom:6px; min-height:48px; display:flex; flex-direction:column; justify-content:center; padding-left:45px;">
+                <div style="text-align:center; margin-bottom:6px; min-height:48px; display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%;">
                     <div id="disp-name-${i}" style="font-size:24px; font-weight:bold; font-family:'Cinzel', serif; text-shadow: 1px 1px 2px black;"></div>
                     <div id="disp-char-${i}" style="font-size:14px; color:#c0b8a8; text-shadow:1px 1px 1px black; display:none;"></div>
                 </div>
@@ -598,8 +598,8 @@ socket.on("update", (data) => {
         document.getElementById(`disp-status-${i}`).innerText = t.running ? "Running" : (t.remaining <= 0 ? "Ready" : "Paused");
         
         const orderDiv = document.getElementById(`disp-order-${i}`);
-        if (t.position) {
-            orderDiv.innerText = `Order: #${t.position}`;
+        if (t.raised_hand && t.position) {
+            orderDiv.innerText = `Hand #${t.position}`;
             orderDiv.style.display = "block";
         } else {
             orderDiv.style.display = "none";

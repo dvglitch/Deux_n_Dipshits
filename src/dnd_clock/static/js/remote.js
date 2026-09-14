@@ -397,44 +397,261 @@ function renderResourcesView() {
     }
 }
 
+// --- Square Portrait Cropper Modal ---
+let cropperState = {
+    img: null,
+    callback: null,
+    zoom: 1,
+    rotation: 0,
+    posX: 0,
+    posY: 0,
+    minScale: 1,
+    isDragging: false,
+    startX: 0,
+    startY: 0
+};
+
+function ensureCropperModalHTML() {
+    if (document.getElementById("portrait-cropper-modal")) return;
+
+    const modal = document.createElement("div");
+    modal.id = "portrait-cropper-modal";
+    modal.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.88);
+        z-index: 999999;
+        justify-content: center; align-items: center;
+        padding: 15px; box-sizing: border-box;
+    `;
+    modal.innerHTML = `
+        <div style="background:#241f1a; border:2px solid #d4af37; border-radius:12px; padding:20px; max-width:360px; width:100%; text-align:center; box-sizing:border-box; box-shadow:0 10px 40px rgba(0,0,0,0.9);">
+            <h3 style="margin:0 0 6px 0; font-family:'Cinzel', serif; color:#d4af37; font-size:20px;">✂️ Crop Profile Picture</h3>
+            <div style="margin:0 0 12px 0; font-size:12px; color:#aaa;">Drag image to position, zoom with slider</div>
+
+            <!-- Square Frame with Circular Preview Guide -->
+            <div id="cropper-viewport" style="width:240px; height:240px; margin:0 auto 15px; position:relative; overflow:hidden; border:3px solid #d4af37; border-radius:50%; background:#111; cursor:grab; user-select:none; touch-action:none; box-shadow:0 4px 15px rgba(0,0,0,0.8);">
+                <img id="cropper-preview-img" src="" alt="Crop" style="position:absolute; top:0; left:0; transform-origin:center center; pointer-events:none; max-width:none; max-height:none;">
+            </div>
+
+            <!-- Controls -->
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:8px;">
+                <span style="font-size:14px;">🔍</span>
+                <input type="range" id="cropper-zoom-range" min="1" max="3" step="0.01" value="1" style="flex:1; cursor:pointer;">
+                <button type="button" id="cropper-rotate-btn" style="background:#333; border:1px solid #555; color:white; border-radius:5px; padding:5px 10px; font-size:13px; cursor:pointer;" title="Rotate 90°">🔄</button>
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="display:flex; gap:10px;">
+                <button type="button" onclick="closePortraitCropper()" style="flex:1; background:#555; border:none; padding:10px; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">Cancel</button>
+                <button type="button" onclick="applyPortraitCrop()" style="flex:1; background:#1e7f3f; border:none; padding:10px; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">Crop & Apply</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const vp = document.getElementById("cropper-viewport");
+    const zoomInput = document.getElementById("cropper-zoom-range");
+    const rotateBtn = document.getElementById("cropper-rotate-btn");
+
+    vp.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        cropperState.isDragging = true;
+        cropperState.startX = e.clientX - cropperState.posX;
+        cropperState.startY = e.clientY - cropperState.posY;
+        vp.style.cursor = "grabbing";
+        if (vp.setPointerCapture) vp.setPointerCapture(e.pointerId);
+    });
+
+    vp.addEventListener("pointermove", (e) => {
+        if (!cropperState.isDragging) return;
+        let newX = e.clientX - cropperState.startX;
+        let newY = e.clientY - cropperState.startY;
+        updateCropperPos(newX, newY);
+    });
+
+    const stopDrag = () => {
+        cropperState.isDragging = false;
+        vp.style.cursor = "grab";
+    };
+    vp.addEventListener("pointerup", stopDrag);
+    vp.addEventListener("pointercancel", stopDrag);
+
+    zoomInput.addEventListener("input", (e) => {
+        cropperState.zoom = parseFloat(e.target.value);
+        updateCropperPos(cropperState.posX, cropperState.posY);
+    });
+
+    rotateBtn.addEventListener("click", () => {
+        cropperState.rotation = (cropperState.rotation + 90) % 360;
+        recalcCropperLimits();
+    });
+}
+
+function openPortraitCropper(file, callback) {
+    ensureCropperModalHTML();
+    cropperState.callback = callback;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            cropperState.img = img;
+            cropperState.zoom = 1;
+            cropperState.rotation = 0;
+
+            const previewImg = document.getElementById("cropper-preview-img");
+            previewImg.src = e.target.result;
+
+            const zoomInput = document.getElementById("cropper-zoom-range");
+            if (zoomInput) zoomInput.value = 1;
+
+            recalcCropperLimits();
+
+            const modal = document.getElementById("portrait-cropper-modal");
+            if (modal) modal.style.display = "flex";
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function closePortraitCropper() {
+    const modal = document.getElementById("portrait-cropper-modal");
+    if (modal) modal.style.display = "none";
+    cropperState.img = null;
+    cropperState.callback = null;
+}
+
+function recalcCropperLimits() {
+    if (!cropperState.img) return;
+    const isRot = (cropperState.rotation % 180 !== 0);
+    const effW = isRot ? cropperState.img.naturalHeight : cropperState.img.naturalWidth;
+    const effH = isRot ? cropperState.img.naturalWidth : cropperState.img.naturalHeight;
+
+    cropperState.minScale = Math.max(240 / effW, 240 / effH);
+
+    const renderW = cropperState.img.naturalWidth * cropperState.minScale;
+    const renderH = cropperState.img.naturalHeight * cropperState.minScale;
+    const initX = (240 - renderW) / 2;
+    const initY = (240 - renderH) / 2;
+
+    updateCropperPos(initX, initY);
+}
+
+function updateCropperPos(x, y) {
+    if (!cropperState.img) return;
+    const scale = cropperState.minScale * cropperState.zoom;
+    const renderW = cropperState.img.naturalWidth * scale;
+    const renderH = cropperState.img.naturalHeight * scale;
+
+    const isRot = (cropperState.rotation % 180 !== 0);
+    const boundW = isRot ? renderH : renderW;
+    const boundH = isRot ? renderW : renderH;
+
+    const minX = 240 - boundW;
+    const maxX = 0;
+    const minY = 240 - boundH;
+    const maxY = 0;
+
+    cropperState.posX = Math.min(maxX, Math.max(minX, x));
+    cropperState.posY = Math.min(maxY, Math.max(minY, y));
+
+    const previewImg = document.getElementById("cropper-preview-img");
+    if (previewImg) {
+        previewImg.style.width = `${renderW}px`;
+        previewImg.style.height = `${renderH}px`;
+
+        const centerX = cropperState.posX + boundW / 2;
+        const centerY = cropperState.posY + boundH / 2;
+        const transX = centerX - renderW / 2;
+        const transY = centerY - renderH / 2;
+
+        previewImg.style.transform = `translate(${transX}px, ${transY}px) rotate(${cropperState.rotation}deg)`;
+    }
+}
+
+function applyPortraitCrop() {
+    if (!cropperState.img || !cropperState.callback) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 300;
+    canvas.height = 300;
+    const ctx = canvas.getContext("2d");
+
+    const scale = cropperState.minScale * cropperState.zoom;
+    const renderW = cropperState.img.naturalWidth * scale;
+    const renderH = cropperState.img.naturalHeight * scale;
+
+    const isRot = (cropperState.rotation % 180 !== 0);
+    const boundW = isRot ? renderH : renderW;
+    const boundH = isRot ? renderW : renderH;
+
+    const outRatio = 300 / 240;
+    const centerX = (cropperState.posX + boundW / 2) * outRatio;
+    const centerY = (cropperState.posY + boundH / 2) * outRatio;
+
+    ctx.fillStyle = "#111111";
+    ctx.fillRect(0, 0, 300, 300);
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate((cropperState.rotation * Math.PI) / 180);
+    ctx.drawImage(cropperState.img, (-renderW * outRatio) / 2, (-renderH * outRatio) / 2, renderW * outRatio, renderH * outRatio);
+    ctx.restore();
+
+    canvas.toBlob((blob) => {
+        if (!blob) return;
+        const croppedFile = new File([blob], "cropped_portrait.png", { type: "image/png" });
+        const cb = cropperState.callback;
+        closePortraitCropper();
+        if (cb) cb(croppedFile);
+    }, "image/png");
+}
+
 async function handlePlayerPortraitUpload(input) {
     if (!selectedTimerId || !input.files || !input.files[0]) return;
     const file = input.files[0];
-    const formData = new FormData();
-    formData.append("player_id", `player_${selectedTimerId}`);
-    formData.append("file", file);
 
-    const statusEl = document.getElementById("player-portrait-status");
-    if (statusEl) {
-        statusEl.textContent = "Uploading portrait...";
-        statusEl.style.color = "#d4af37";
-    }
+    openPortraitCropper(file, async (croppedFile) => {
+        const formData = new FormData();
+        formData.append("player_id", `player_${selectedTimerId}`);
+        formData.append("file", croppedFile);
 
-    try {
-        const res = await fetch("/api/campaign/upload_portrait", {
-            method: "POST",
-            body: formData
-        });
-        const result = await res.json();
-        if (res.ok && result.portrait_url) {
-            if (timers[selectedTimerId]) {
-                timers[selectedTimerId].portrait_url = result.portrait_url;
-            }
-            socket.emit("set_timer_meta", {
-                timer: selectedTimerId,
-                portrait_url: result.portrait_url
-            });
-            renderActiveCooldownView();
-            renderResourcesView();
-        } else {
-            throw new Error(result.error || "Upload failed");
-        }
-    } catch (err) {
+        const statusEl = document.getElementById("player-portrait-status");
         if (statusEl) {
-            statusEl.textContent = "Upload error: " + err.message;
-            statusEl.style.color = "#e74c3c";
+            statusEl.textContent = "Uploading portrait...";
+            statusEl.style.color = "#d4af37";
         }
-    }
+
+        try {
+            const res = await fetch("/api/campaign/upload_portrait", {
+                method: "POST",
+                body: formData
+            });
+            const result = await res.json();
+            if (res.ok && result.portrait_url) {
+                if (timers[selectedTimerId]) {
+                    timers[selectedTimerId].portrait_url = result.portrait_url;
+                }
+                socket.emit("set_timer_meta", {
+                    timer: selectedTimerId,
+                    portrait_url: result.portrait_url
+                });
+                renderActiveCooldownView();
+                renderResourcesView();
+            } else {
+                throw new Error(result.error || "Upload failed");
+            }
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent = "Upload error: " + err.message;
+                statusEl.style.color = "#e74c3c";
+            }
+        }
+    });
+    input.value = "";
 }
 
 function removePlayerPortrait() {

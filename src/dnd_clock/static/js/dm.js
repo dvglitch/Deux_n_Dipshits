@@ -508,7 +508,7 @@ function renderTimers() {
             }
 
             const status = t.remaining <= 0 ? "Ready" : (t.running ? "Running" : "Paused");
-            const pos = t.position ? `Order: #${t.position}` : "";
+            const pos = (t.raised_hand && t.position) ? `Hand #${t.position}` : "";
             const toggleTxt = t.running ? "Pause" : "Start";
             const adjDisplay = adjustLocked ? "none" : "grid";
 

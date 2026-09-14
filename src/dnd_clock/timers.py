@@ -380,7 +380,15 @@ def delete_timer(timer_id):
 def toggle_hand(timer_id):
     if timer_id not in timers: return
     t = timers[timer_id]
-    t["raised_hand"] = not t.get("raised_hand", False)
+    new_state = not t.get("raised_hand", False)
+    t["raised_hand"] = new_state
+    if new_state:
+        if timer_id not in finish_order:
+            finish_order.append(timer_id)
+    else:
+        if timer_id in finish_order:
+            finish_order.remove(timer_id)
+    save_current_state()
 
 def set_condition(timer_id, condition):
     if timer_id not in timers: return

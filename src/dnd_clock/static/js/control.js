@@ -262,10 +262,10 @@ socket.on("update", (data) => {
         document.getElementById(`time-display-${i}`).innerText = formatTime(t.remaining);
         document.getElementById(`status-${i}`).innerText = t.running ? "Running" : "Paused";
 
-        // ✅ Update position (finish order)
+        // ✅ Update position (hand raise order)
         const posDiv = document.getElementById(`position-${i}`);
-        if (t.position) {
-            posDiv.innerText = `Order: ${t.position}`;
+        if (t.raised_hand && t.position) {
+            posDiv.innerText = `Hand #${t.position}`;
         } else {
             posDiv.innerText = "";
         }
