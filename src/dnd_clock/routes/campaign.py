@@ -1,6 +1,6 @@
 """API routes for Campaign Maintenance (players, spells, maps, objectives, recaps)."""
 import logging
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from ..database.factory import create_campaign_repository
 from ..database.repositories import RepositoryError
@@ -19,6 +19,19 @@ def _remove_legacy_portrait_fields(collection, records):
         {key: value for key, value in record.items() if key != "portrait_url"}
         for record in records
     ]
+
+
+def _sync_live_player_profiles(records):
+    """Apply saved profile configuration to the running session and notify clients."""
+    if records is None:
+        return
+
+    from .. import timers
+
+    timers.sync_with_campaign_profiles(records, clear_enemies=False, restore_progress=False)
+    socketio = current_app.extensions.get("socketio")
+    if socketio is not None:
+        socketio.emit("update", timers.get_timer_payload())
 
 
 @campaign_bp.get("/<collection>")
@@ -59,6 +72,8 @@ def save_collection(collection: str):
         repo.save_collection(collection, records)
         saved_records = repo.load_collection(collection)
         saved_records = _remove_legacy_portrait_fields(collection, saved_records)
+        if collection == "player_profiles":
+            _sync_live_player_profiles(saved_records)
         return jsonify({"collection": collection, "records": saved_records, "status": "saved"})
     except (RepositoryError, Exception) as err:
         logger.exception("Failed to save collection %s: %s", collection, err)

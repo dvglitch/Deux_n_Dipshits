@@ -5,6 +5,7 @@ from pathlib import Path
 
 from dnd_clock.app import create_app
 from dnd_clock.database.repositories import SQLiteCampaignRepository
+from dnd_clock import timers as tm
 
 
 class CampaignApiTests(unittest.TestCase):
@@ -57,6 +58,28 @@ class CampaignApiTests(unittest.TestCase):
         self.assertEqual(len(records), 2)
         self.assertEqual(records[0]["name"], "Thorin")
         self.assertEqual(records[1]["name"], "Gandalf")
+
+    def test_saving_player_profiles_refreshes_live_timer_configuration(self):
+        payload = {
+            "records": [{
+                "id": "player_1",
+                "name": "Thorin",
+                "max_hp": 45,
+                "default_cooldown": 90,
+                "accent_color": "#4a90e2",
+                "spell_slots_max": {"1": 2, "2": 5, "3": 1},
+            }]
+        }
+
+        response = self.client.post("/api/campaign/player_profiles", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(tm.timers[1]["max_hp"], 45)
+        self.assertEqual(tm.timers[1]["duration"], 90)
+        self.assertEqual(tm.timers[1]["accent_color"], "#4a90e2")
+        slots = tm.timers[1]["spell_slots"]
+        self.assertEqual({level: info["max"] for level, info in slots.items()}, {"1": 2, "2": 5, "3": 1})
+        self.assertTrue(all(info["current"] <= info["max"] for info in slots.values()))
 
     def test_spells_action_type_and_cooldown_persistence(self):
         payload = {
