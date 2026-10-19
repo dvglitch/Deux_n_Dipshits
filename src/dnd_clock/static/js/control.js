@@ -1509,7 +1509,16 @@ async function loadRecaps() {
         const tbody = document.getElementById('maint-recaps-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
-        const records = data.records || [];
+        const records = [...(data.records || [])].sort((a, b) => {
+            const aNum = Number(a.session_number);
+            const bNum = Number(b.session_number);
+            const aHasNum = a.session_number !== undefined && a.session_number !== null
+                && a.session_number !== '' && Number.isFinite(aNum);
+            const bHasNum = b.session_number !== undefined && b.session_number !== null
+                && b.session_number !== '' && Number.isFinite(bNum);
+            if (aHasNum !== bHasNum) return aHasNum ? -1 : 1;
+            return aHasNum ? aNum - bNum : 0;
+        });
         if (records.length === 0) {
             addRecapRow();
         } else {
