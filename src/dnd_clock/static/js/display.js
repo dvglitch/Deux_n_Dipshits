@@ -438,7 +438,26 @@ async function loadDisplayRecaps() {
             container.innerHTML = `<div style="text-align:center; color:#888; font-size:20px; padding:40px;">No session recaps available yet.</div>`;
             return;
         }
-        container.innerHTML = recaps.slice(-3).reverse().map(r => `
+        // Sort recaps by session_number descending (fallback to date parsing if missing)
+        recaps.sort((a, b) => {
+            const aNum = a.session_number !== undefined ? Number(a.session_number) : 0;
+            const bNum = b.session_number !== undefined ? Number(b.session_number) : 0;
+            if (aNum !== bNum) return bNum - aNum;
+            // If session numbers are equal or missing, compare dates (assuming MM/DD/YYYY)
+            const parseDate = (s) => {
+                if (!s) return 0;
+                const parts = s.split('/')
+                    .map(p => parseInt(p, 10))
+                    .filter(n => !isNaN(n));
+                if (parts.length !== 3) return 0;
+                const [m, d, y] = parts;
+                return new Date(y, m - 1, d).getTime();
+            };
+            return parseDate(b.date) - parseDate(a.date);
+        });
+        // Take the most recent three recaps after sorting
+        const recent = recaps.slice(0, 3);
+        container.innerHTML = recent.map(r => `
             <div style="background:rgba(20,16,12,0.85); border:1px solid rgba(212,175,55,0.3); border-radius:10px; padding:22px; box-shadow:0 6px 15px rgba(0,0,0,0.5);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h3 style="margin:0; font-family:'Cinzel', serif; color:#d4af37; font-size:24px;">Session ${r.session_number || ''}: ${r.title || 'Untitled'}</h3>
