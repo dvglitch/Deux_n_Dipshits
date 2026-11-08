@@ -1,4 +1,22 @@
 const socket = io();
+window.registerSessionSync(socket);
+
+socket.on("session_saved", (data) => {
+    showMaintStatus(`Session saved (revision ${data.revision}).`);
+});
+
+socket.on("session_status", (data) => {
+    const status = document.getElementById("session-save-status");
+    if (status) {
+        status.textContent = data.persistence_available
+            ? `Saved ${data.saved_at ? new Date(data.saved_at).toLocaleTimeString() : "session active"}`
+            : "Session storage unavailable";
+    }
+});
+
+function saveSessionNow() {
+    socket.emit("save_session");
+}
 
 // Tracks when each timer first hit 0:00 so the finished-red background can hold then fade.
 const finishedSinceByTimer = {};
@@ -421,6 +439,7 @@ function confirmResetSession() {
         socket.emit("start_session");
         showMaintStatus ? showMaintStatus("Session initialized: Timers synchronized with saved party profiles.") : null;
     }
+
 }
 
 function setAll() {

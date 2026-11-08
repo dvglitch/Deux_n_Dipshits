@@ -1,18 +1,35 @@
+import os
+import time
 import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
 
+for variable in (
+    "POSTGRES_URL",
+    "POSTGRES_PRISMA_URL",
+    "DATABASE_URL",
+    "POSTGRES_URL_NON_POOLING",
+):
+    os.environ[variable] = ""
+
 from dnd_clock.app import create_app
 from dnd_clock import timers as tm
+from dnd_clock.database.repositories import RepositoryError, SQLiteCampaignRepository
 
 
 class RealtimeSocketTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.test_settings_path = Path(self.temp_dir.name) / "test_settings.json"
+        self.test_database_path = Path(self.temp_dir.name) / "test_database.sqlite3"
         self.settings_patcher = patch("dnd_clock.persistence.SETTINGS_FILE", str(self.test_settings_path))
         self.settings_patcher.start()
+        self.repository_patcher = patch(
+            "dnd_clock.database.factory.create_campaign_repository",
+            side_effect=lambda: SQLiteCampaignRepository(self.test_database_path),
+        )
+        self.repository_patcher.start()
 
         self.app, self.socketio = create_app(start_background_task=False)
         self.client = self.socketio.test_client(self.app)
@@ -22,6 +39,7 @@ class RealtimeSocketTests(unittest.TestCase):
     def tearDown(self):
         if self.client.is_connected():
             self.client.disconnect()
+        self.repository_patcher.stop()
         self.settings_patcher.stop()
         self.temp_dir.cleanup()
 
@@ -59,13 +77,13 @@ class RealtimeSocketTests(unittest.TestCase):
         self.client.get_received()
 
     def test_adjust_locked_state_prevents_client_adjust(self):
-        tm.control_state["adjust_locked"] = True
+        tm.update_control_state("adjust_locked", True)
         initial_remaining = tm.timers[1]["remaining"]
 
         self.client.emit("adjust_timer", {"timer": 1, "delta": 15})
         self.assertEqual(tm.timers[1]["remaining"], initial_remaining)
 
-        tm.control_state["adjust_locked"] = False
+        tm.update_control_state("adjust_locked", False)
 
     def test_theme_and_sound_updates_broadcast_new_state(self):
         self.client.emit("set_theme", {"theme": "forest"})
@@ -84,6 +102,79 @@ class RealtimeSocketTests(unittest.TestCase):
         self.client.emit("set_hp", {"timer": 1, "current_hp": 18, "max_hp": 35})
         self.assertEqual(tm.timers[1]["current_hp"], 18)
         self.assertEqual(tm.timers[1]["max_hp"], 35)
+
+    def test_sync_state_restores_canonical_hp_for_reconnecting_client(self):
+        self.client.emit("set_hp", {"timer": 1, "current_hp": 16, "max_hp": 32})
+        tm.timers[1]["current_hp"] = 30
+
+        new_client = self.socketio.test_client(self.app)
+        self.assertEqual(tm.timers[1]["current_hp"], 16)
+        new_client.disconnect()
+
+        tm.timers[1]["current_hp"] = 30
+        self.client.emit("sync_state")
+        self.assertEqual(tm.timers[1]["current_hp"], 16)
+
+    def test_failed_session_save_rolls_back_and_does_not_broadcast_update(self):
+        initial_hp = tm.timers[1]["current_hp"]
+        with patch.object(
+            SQLiteCampaignRepository,
+            "save_active_session",
+            side_effect=RepositoryError("database unavailable"),
+        ):
+            self.client.emit(
+                "set_hp", {"timer": 1, "current_hp": initial_hp - 1}
+            )
+
+        received = self.client.get_received()
+        self.assertIn("session_error", [event["name"] for event in received])
+        self.assertNotIn("update", [event["name"] for event in received])
+        self.assertEqual(tm.timers[1]["current_hp"], initial_hp)
+
+    def test_sync_marks_elapsed_timers_finished(self):
+        snapshot = tm._session_snapshot()
+        snapshot["timers"][1].update({
+            "remaining": 1,
+            "running": True,
+            "finished": False,
+            "last_update": time.time() - 5,
+        })
+
+        tm.apply_session_snapshot(snapshot)
+
+        self.assertEqual(tm.timers[1]["remaining"], 0)
+        self.assertFalse(tm.timers[1]["running"])
+        self.assertTrue(tm.timers[1]["finished"])
+        self.assertIn(1, tm.finish_order)
+
+    def test_start_session_restores_profile_max_hp_and_spell_slots(self):
+        repository = SQLiteCampaignRepository(self.test_database_path)
+        try:
+            repository.save_collection(
+                "player_profiles",
+                [{
+                    "id": "player_1",
+                    "name": "Alder",
+                    "max_hp": 32,
+                    "spell_slots_max": {"1": 3, "2": 1, "3": 0},
+                }],
+            )
+        finally:
+            repository.close()
+
+        self.client.emit("set_hp", {"timer": 1, "current_hp": 16, "max_hp": 32})
+        self.client.emit("start_session")
+
+        self.assertEqual(tm.timers[1]["current_hp"], 32)
+        self.assertEqual(tm.timers[1]["max_hp"], 32)
+        self.assertEqual(
+            tm.timers[1]["spell_slots"],
+            {
+                "1": {"current": 3, "max": 3},
+                "2": {"current": 1, "max": 1},
+                "3": {"current": 0, "max": 0},
+            },
+        )
 
     def test_set_display_tab_broadcasts_state(self):
         self.client.emit("set_display_tab", {"tab": "objectives"})

@@ -1,4 +1,5 @@
 const socket = io();
+window.registerSessionSync(socket);
 
 let timers = {};
 let expanded = null;

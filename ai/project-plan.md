@@ -18,7 +18,7 @@ Create a fast, low-interruption combat support application for one DnD group:
 - The DM phone provides fast control of player timers, enemy timers, global session actions, locks, restores, and display tabs.
 - The laptop provides separate Session Control and Campaign Maintenance modes.
 - Campaign data persists between sessions.
-- Live session and combat state may reset after a server restart or deployment.
+- Live session and combat state must survive page reconnects and server restarts through shared persistence.
 - The dedicated app commits to the cooldown-based combat model.
 
 ## Product boundaries
@@ -45,7 +45,7 @@ Create a fast, low-interruption combat support application for one DnD group:
 - Objectives.
 - Session recaps.
 
-### Disposable session and combat data
+### Active session and combat data
 
 - Active permanent players and temporary guests.
 - Current player and enemy timers.
@@ -56,7 +56,7 @@ Create a fast, low-interruption combat support application for one DnD group:
 - Session lock/pause state.
 - Selected display tab.
 
-A server restart or deployment may clear disposable state. Starting a session is an explicit operation and should restore HP and spell slots, clear enemies and combat timers, activate the selected roster, and switch the display to Timers.
+The active session is stored in shared persistence and resumes on page reconnect or server restart. Meaningful state changes are saved without writing every timer tick. Pages reconcile against canonical state every two seconds to handle requests routed to separate Vercel runtimes. The Session Control page also offers a manual save checkpoint. Starting a new session is an explicit operation that restores HP and spell slots, clears enemies and combat timers, activates the selected roster, and switches the display to Timers. There is no automatic session expiry.
 
 ### Explicit non-goals for the first dedicated version
 

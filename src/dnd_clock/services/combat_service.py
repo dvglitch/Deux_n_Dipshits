@@ -19,6 +19,7 @@ class CombatService:
     @staticmethod
     def start_session() -> None:
         """Start/reset a fresh session: sync stored campaign profiles, reset HP and slots to full, clear enemies."""
+        import time
         from ..database.factory import create_campaign_repository
         repo = create_campaign_repository()
         try:
@@ -26,9 +27,17 @@ class CombatService:
         finally:
             repo.close()
 
-        tm.sync_with_campaign_profiles(profiles, clear_enemies=True)
-        tm.update_control_state("display_tab", "timers")
-        tm.reset_all_timers()
+        persistence_enabled = tm.session_persistence_enabled
+        tm.session_persistence_enabled = False
+        try:
+            tm.sync_with_campaign_profiles(profiles, clear_enemies=True)
+            tm.update_control_state("display_tab", "timers")
+            tm.reset_all_timers()
+            tm.session_active = True
+            tm.session_started_at = time.time()
+        finally:
+            tm.session_persistence_enabled = persistence_enabled
+        tm.save_current_state()
 
     @staticmethod
     def toggle_hand(timer_id_raw: Any) -> bool:

@@ -1,3 +1,6 @@
+import copy
+import logging
+import threading
 import time
 from .persistence import load_settings, save_settings
 
@@ -22,6 +25,15 @@ active_timer_ids = settings.get("active_timer_ids", list(range(1, max_timer_id +
 # Timer state (will be populated dynamically)
 timers = {}
 finish_order = []
+session_active = False
+session_started_at = None
+session_revision = 0
+session_saved_at = None
+session_persistence_enabled = False
+session_persistence_error = None
+session_persistence_durable = False
+session_state_lock = threading.RLock()
+logger = logging.getLogger(__name__)
 
 
 control_state = {
@@ -37,6 +49,150 @@ control_state = {
     "active_map_id": active_map_id,
     "cooldown_mode": True
 }
+
+def _session_repository():
+    from .database.factory import create_campaign_repository
+
+    return create_campaign_repository()
+
+
+def _session_snapshot():
+    now = time.time()
+    snapshot_timers = copy.deepcopy(timers)
+    for timer in snapshot_timers.values():
+        if timer.get("running"):
+            elapsed = max(0, now - float(timer.get("last_update", now)))
+            timer["remaining"] = max(0, float(timer.get("remaining", 0)) - elapsed)
+        timer["last_update"] = now
+
+    return {
+        "active": session_active,
+        "started_at": session_started_at,
+        "revision": session_revision,
+        "saved_at": session_saved_at,
+        "timers": snapshot_timers,
+        "active_timer_ids": list(active_timer_ids),
+        "max_timer_id": max_timer_id,
+        "finish_order": list(finish_order),
+        "control_state": dict(control_state),
+    }
+
+
+def persist_active_session():
+    """Persist a canonical snapshot without writing timer-loop ticks."""
+    global session_revision, session_saved_at, session_persistence_error
+    global session_persistence_durable
+    if not session_persistence_enabled:
+        return
+
+    repository = _session_repository()
+    try:
+        session_persistence_durable = (
+            getattr(repository, "database_path", None) != ":memory:"
+        )
+        saved = repository.save_active_session(
+            _session_snapshot(), expected_revision=session_revision
+        )
+        session_revision = int(saved["revision"])
+        session_saved_at = saved.get("saved_at")
+        session_persistence_error = None
+    finally:
+        repository.close()
+
+
+def restore_active_session():
+    """Replace process-local state with the latest shared active-session snapshot."""
+    global timers, active_timer_ids, max_timer_id, finish_order
+    global session_active, session_started_at, session_revision, session_saved_at
+    global DEFAULT_DURATION, theme, custom_bg_url, adjust_interval
+    global timer_done_sound, hand_raise_sound, session_persistence_error
+    global session_persistence_durable
+
+    repository = _session_repository()
+    try:
+        session_persistence_durable = (
+            getattr(repository, "database_path", None) != ":memory:"
+        )
+        saved = repository.load_active_session()
+    finally:
+        repository.close()
+
+    if saved is None or not saved.get("active"):
+        session_revision = 0
+        session_saved_at = None
+        return False
+
+    apply_session_snapshot(saved)
+    return True
+
+
+def apply_session_snapshot(saved):
+    """Apply a session snapshot already loaded from durable storage."""
+    global timers, active_timer_ids, max_timer_id, finish_order
+    global session_active, session_started_at, session_revision, session_saved_at
+    global DEFAULT_DURATION, theme, custom_bg_url, adjust_interval
+    global timer_done_sound, hand_raise_sound, session_persistence_error
+
+    now = time.time()
+    restored_timers = {}
+    newly_finished = []
+    for timer_id, timer in saved.get("timers", {}).items():
+        timer_data = dict(timer)
+        if timer_data.get("running"):
+            last_update = float(timer_data.get("last_update", now))
+            remaining = float(timer_data.get("remaining", 0))
+            elapsed = max(0, now - last_update)
+            timer_data["remaining"] = max(
+                0, remaining - elapsed
+            )
+            if timer_data["remaining"] <= 0:
+                timer_data["running"] = False
+                timer_data["finished"] = True
+                newly_finished.append((last_update + remaining, int(timer_id)))
+        timer_data["last_update"] = now
+        restored_timers[int(timer_id)] = timer_data
+
+    timers = restored_timers
+    active_timer_ids = [int(timer_id) for timer_id in saved.get("active_timer_ids", [])]
+    max_timer_id = int(saved.get("max_timer_id", max(active_timer_ids, default=0)))
+    finish_order = [int(timer_id) for timer_id in saved.get("finish_order", [])]
+    for _, timer_id in sorted(newly_finished):
+        if timer_id not in finish_order:
+            finish_order.append(timer_id)
+    session_active = True
+    session_started_at = saved.get("started_at")
+    session_revision = int(saved.get("revision", 0))
+    session_saved_at = saved.get("saved_at")
+    session_persistence_error = None
+
+    restored_control_state = saved.get("control_state", {})
+    control_state.update(restored_control_state)
+    DEFAULT_DURATION = int(control_state.get("DEFAULT_DURATION", DEFAULT_DURATION))
+    theme = control_state.get("theme", theme)
+    custom_bg_url = control_state.get("custom_bg_url", custom_bg_url)
+    adjust_interval = int(control_state.get("adjust_interval", adjust_interval))
+    timer_done_sound = control_state.get("timer_done_sound", timer_done_sound)
+    hand_raise_sound = control_state.get("hand_raise_sound", hand_raise_sound)
+
+
+def initialize_shared_session():
+    """Resume the saved session, or seed shared storage from the legacy snapshot."""
+    global session_active, session_started_at, session_persistence_enabled
+    global session_persistence_error
+
+    session_persistence_enabled = True
+    session_persistence_error = None
+    try:
+        if restore_active_session():
+            return
+        session_active = True
+        session_started_at = time.time()
+        persist_active_session()
+    except Exception as error:
+        session_persistence_enabled = False
+        session_persistence_error = str(error)
+        logger.exception("Could not initialize shared session state")
+
 
 def save_current_state():
     """Saves the current variables down to the persistence layer"""
@@ -66,6 +222,7 @@ def save_current_state():
         "hand_raise_sound": control_state.get("hand_raise_sound", "synthetic")
     }
     save_settings(settings)
+    persist_active_session()
 
 def sync_with_campaign_profiles(profiles=None, clear_enemies=False, restore_progress=False):
     """Sync active timers with saved campaign player profiles (from DB or provided list).
@@ -410,6 +567,19 @@ def get_timer_payload():
         for i, t in timers.items()
     }
 
+
+def get_session_status():
+    return {
+        "active": session_active,
+        "revision": session_revision,
+        "saved_at": session_saved_at,
+        "started_at": session_started_at,
+        "persistence_available": session_persistence_enabled
+        and session_persistence_error is None
+        and session_persistence_durable,
+    }
+
+
 def delete_timer(timer_id):
     if timer_id in timers:
         del timers[timer_id]
@@ -435,6 +605,7 @@ def toggle_hand(timer_id):
 def set_condition(timer_id, condition):
     if timer_id not in timers: return
     timers[timer_id]["condition"] = condition
+    save_current_state()
 
 def toggle_timer(timer_id):
     if timer_id not in timers: return
@@ -444,6 +615,7 @@ def toggle_timer(timer_id):
         t["last_update"] = time.time()
     else:
         t["running"] = False
+    save_current_state()
 
 def _reset_single(timer_id, start=False):
     """Internal helper to reset a single timer by ID avoiding duplicate logic"""
@@ -460,6 +632,7 @@ def _reset_single(timer_id, start=False):
 
 def reset_timer(timer_id, start=False):
     _reset_single(timer_id, start=start)
+    save_current_state()
 
 def toggle_all_timers():
     now = time.time()
@@ -470,11 +643,13 @@ def toggle_all_timers():
             t["last_update"] = now
         else:
             t["running"] = False
+    save_current_state()
 
 def reset_all_timers():
     for i in timers.keys():
         _reset_single(i)
     finish_order.clear()
+    save_current_state()
 
 def set_timer(timer_id, seconds):
     """Set the active countdown only; does not change the default reset duration."""
@@ -483,12 +658,14 @@ def set_timer(timer_id, seconds):
     t["remaining"] = int(seconds)
     t["running"] = False
     t["last_update"] = time.time()
+    save_current_state()
 
 def adjust_timer(timer_id, delta):
     if timer_id not in timers: return
     t = timers[timer_id]
     t["remaining"] = max(0, t["remaining"] + int(delta))
     t["last_update"] = time.time()
+    save_current_state()
 
 def set_timer_name(timer_id, name):
     if timer_id not in timers: return
@@ -506,30 +683,20 @@ def set_timer_visibility(timer_id, show_on_remote):
 
 def timer_loop(socketio):
     while True:
-        now = time.time()
+        with session_state_lock:
+            now = time.time()
 
-        for i, t in timers.items():
-            if t["running"]:
-                elapsed = now - t["last_update"]
-                t["remaining"] = max(0, t["remaining"] - elapsed)
-                t["last_update"] = now
+            for i, t in timers.items():
+                if t["running"]:
+                    elapsed = now - t["last_update"]
+                    t["remaining"] = max(0, t["remaining"] - elapsed)
+                    t["last_update"] = now
 
-                if t["remaining"] <= 0 and not t["finished"]:
-                    t["remaining"] = 0
-                    t["finished"] = True
-                    t["running"] = False
-                    if i not in finish_order:
-                        finish_order.append(i)
+                    if t["remaining"] <= 0 and not t["finished"]:
+                        t["remaining"] = 0
+                        t["finished"] = True
+                        t["running"] = False
+                        if i not in finish_order:
+                            finish_order.append(i)
 
-        positions = {tid: idx + 1 for idx, tid in enumerate(finish_order)}
-
-        payload = {
-            i: {
-                **t,
-                "position": positions.get(i)
-            }
-            for i, t in timers.items()
-        }
-
-        socketio.emit("update", payload)
         socketio.sleep(0.5)

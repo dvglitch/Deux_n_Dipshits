@@ -1,9 +1,19 @@
 import copy
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
 from pathlib import Path
 import sys
+
+for variable in (
+    "POSTGRES_URL",
+    "POSTGRES_PRISMA_URL",
+    "DATABASE_URL",
+    "POSTGRES_URL_NON_POOLING",
+):
+    os.environ[variable] = ""
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -201,10 +211,14 @@ class StateBoundaryTests(unittest.TestCase):
 
 class CampaignRepositoryTests(unittest.TestCase):
     def setUp(self):
-        self.repository = SQLiteCampaignRepository()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.repository = SQLiteCampaignRepository(
+            Path(self.temp_dir.name) / "campaign.sqlite3"
+        )
 
     def tearDown(self):
         self.repository.close()
+        self.temp_dir.cleanup()
 
     def test_campaign_collection_round_trip(self):
         records = [{"id": "angel", "name": "Angel", "max_hp": 30}]
@@ -212,6 +226,33 @@ class CampaignRepositoryTests(unittest.TestCase):
         self.repository.save_collection("player_profiles", records)
 
         self.assertEqual(self.repository.load_collection("player_profiles"), records)
+
+    def test_active_session_round_trip_increments_revision(self):
+        state = {
+            "active": True,
+            "started_at": 123.0,
+            "timers": {"1": {"current_hp": 16}},
+            "control_state": {"display_tab": "map"},
+        }
+
+        saved = self.repository.save_active_session(state, expected_revision=0)
+        self.assertEqual(saved["revision"], 1)
+
+        self.repository.close()
+        self.repository = SQLiteCampaignRepository(self.repository.database_path)
+        restored = self.repository.load_active_session()
+        self.assertEqual(restored["timers"]["1"]["current_hp"], 16)
+        self.assertEqual(restored["control_state"]["display_tab"], "map")
+        self.assertEqual(restored["revision"], 1)
+
+        updated = self.repository.save_active_session(
+            {**state, "timers": {"1": {"current_hp": 20}}},
+            expected_revision=1,
+        )
+        self.assertEqual(updated["revision"], 2)
+
+        with self.assertRaisesRegex(RepositoryError, "changed"):
+            self.repository.save_active_session(state, expected_revision=1)
 
     def test_campaign_collections_are_isolated(self):
         self.repository.save_collection("spells", [{"id": "shield", "level": 1}])

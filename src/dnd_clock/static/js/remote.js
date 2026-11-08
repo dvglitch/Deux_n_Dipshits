@@ -1,4 +1,5 @@
 const socket = io();
+window.registerSessionSync(socket);
 
 let timers = {};
 let selectedTimerId = localStorage.getItem("dnd_player_timer_id") ? Number(localStorage.getItem("dnd_player_timer_id")) : null;

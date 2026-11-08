@@ -59,7 +59,7 @@ Open [http://localhost:5000](http://localhost:5000) in your browser.
 
 ## Running Automated Tests
 
-Run the complete test suite (39 unit, state boundary, realtime, roster, and campaign API tests):
+Run the complete test suite (unit, state boundary, realtime, roster, and campaign API tests):
 
 ```powershell
 python -m unittest discover -s tests -v
@@ -72,12 +72,17 @@ Tests run automatically in GitHub Actions on every push and pull request via [`.
 ## Database & Persistence (Supabase PostgreSQL)
 
 - **Durable Campaign Data**: Stored in PostgreSQL (`campaign_records` table) for party profiles, spellbook, world maps, objectives, and session recaps.
-- **Disposable Live State**: Combat timers, conditions, remaining slots, and active enemies are held in-memory and synchronized in real-time via WebSockets / Socket.IO polling. Server restarts clear disposable state without affecting campaign data.
+- **Active Session Data**: HP, spell slots, cooldowns, enemies, conditions, display tab/map, and control settings are automatically saved to the `active_session_state` table when meaningful changes occur. Timer ticks are represented by their last saved remaining time and timestamp rather than writing to the database every tick.
+- **Reconnect Behavior**: Pages resume the shared active session. Since Vercel may route Socket.IO connections to separate runtimes, each page requests canonical state every two seconds; ordinary same-runtime command updates remain immediate. Timer ticks are calculated from saved timestamps, so a runtime does not broadcast its process-local timer state over newer shared state.
+- **Session Controls**: The Session Control page has a **Save Session** checkpoint button. **Start New Session** deliberately resets HP/slots to profile maximums, clears temporary enemies, resets cooldowns, and returns the display to Timers. Sessions do not expire automatically.
+- **Database Requirement**: Cross-runtime active-session persistence requires the configured PostgreSQL database. The local in-memory SQLite fallback does not provide durable session storage and the app reports that session storage is unavailable.
 - **Health Check Endpoint**: Verify database connection status at:
   ```text
   GET /api/persistence/health
   ```
   Returns `{"backend": "PostgresCampaignRepository", "database": "ok"}` when connected.
+
+The application creates `active_session_state` automatically when the repository connects; the table is also included in `src/dnd_clock/database/schema.sql`.
 
 ### Environment Variables
 Configure these in your local `.env` and in Vercel Project Settings:

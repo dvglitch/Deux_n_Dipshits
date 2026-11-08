@@ -17,7 +17,9 @@
             <!-- VIEW 1: SESSION CONTROL -->
             <div id="view-session-control">
                 <!-- Navigation & Quick Session Actions -->
-                <div style="position:fixed; top:20px; right:70px; z-index:1000; display:flex; gap:10px;">
+                <div style="position:fixed; top:20px; right:70px; z-index:1000; display:flex; gap:10px; align-items:center;">
+                    <button onclick="saveSessionNow()" style="background:#245d86; padding:6px 14px; font-size:13px; border-radius:6px; border:1px solid #3985bd; cursor:pointer;" title="Save the current active session to shared storage">💾 Save Session</button>
+                    <span id="session-save-status" style="font-size:11px; color:#c0b8a8;"></span>
                     <button onclick="confirmResetSession()" style="background:#8b2525; padding:6px 14px; font-size:13px; border-radius:6px; border:1px solid #c82333; cursor:pointer;" title="Start a fresh session: restores player HP and spell slots, clears active enemies and timers">⚡ Start New Session</button>
                 </div>
                 <button id="nav-left" class="nav-btn" onclick="showSlide('prev')" style="position:fixed; top:50%; left:0; transform:translateY(-50%); background:rgba(0,0,0,0.35); color:white; border:none; font-size:22px; padding:12px 6px; cursor:pointer; z-index:1000; border-radius:0 8px 8px 0; opacity:0.5; transition: background 0.2s, opacity 0.2s;">&#10094;</button>
@@ -343,6 +345,7 @@
                 .draggable-pin { cursor: grab; user-select: none; }
                 .draggable-pin:active { cursor: grabbing; }
             </style>
+            <script src="/static/js/session-sync.js"></script>
             <script src="/static/js/control.js"></script>
         </body>
     </html>

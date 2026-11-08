@@ -1,7 +1,16 @@
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
+
+for variable in (
+    "POSTGRES_URL",
+    "POSTGRES_PRISMA_URL",
+    "DATABASE_URL",
+    "POSTGRES_URL_NON_POOLING",
+):
+    os.environ[variable] = ""
 
 from dnd_clock.app import create_app
 from dnd_clock.database.repositories import SQLiteCampaignRepository
