@@ -508,6 +508,22 @@ body.page-home {
     max-width: 600px;
 }
 
+.session-quick-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    max-width: 1200px;
+    margin: -15px auto 20px;
+}
+
+#session-save-status {
+    min-width: 0;
+    color: #c0b8a8;
+    font-size: 11px;
+}
+
 .mode-tab-btn {
     flex: 1;
     padding: 12px 20px;
