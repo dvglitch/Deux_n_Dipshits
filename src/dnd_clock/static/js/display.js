@@ -193,17 +193,27 @@ function switchDisplayTab(tab) {
 
 let currentDisplayMaps = [];
 let currentDisplayPins = [];
+let currentDisplayShapes = [];
 let currentActiveMapIndex = 0;
+let displayMapEditing = false;
+let displayMapTool = "select";
+let selectedDisplayMapItem = null;
+let displayMapScale = 1;
+let displayMapOffset = {x: 0, y: 0};
+let displayMapSaveTimer = null;
+let displayMapSaving = false;
+const pendingDisplayMapEdits = new Map();
+let displayedMapKey = "";
 
 function parseDisplayPins(raw) {
     if (!raw) return [];
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw === 'object') return [raw];
+    if (Array.isArray(raw)) return normalizeDisplayPins(raw);
+    if (typeof raw === 'object') return normalizeDisplayPins([raw]);
     if (typeof raw !== 'string') return [];
     
     try {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return normalizeDisplayPins(parsed);
     } catch(e) {}
 
     const pins = [];
@@ -233,7 +243,61 @@ function parseDisplayPins(raw) {
 
 function serializeDisplayPins(pins) {
     if (!pins || !Array.isArray(pins)) return "";
-    return pins.map(p => `${p.label || 'Marker'}: ${Math.round(p.x)}%, ${Math.round(p.y)}%`).join(" | ");
+    return pins.map(p => `${p.label || 'Marker'}: ${Math.round(p.x * 10) / 10}%, ${Math.round(p.y * 10) / 10}%`).join(" | ");
+}
+
+function parseDisplayShapes(raw) {
+    let shapes = raw;
+    if (typeof raw === "string" && raw.trim()) {
+        try {
+            shapes = JSON.parse(raw);
+        } catch (error) {
+            console.warn("Could not parse saved map shapes:", error);
+            return [];
+        }
+    }
+    if (!Array.isArray(shapes)) return [];
+    return shapes.filter(shape =>
+        shape && ["rectangle", "ellipse", "line"].includes(shape.type)
+    ).map((shape, index) => {
+        const type = shape.type;
+        const x = clampMapNumber(shape.x, 0, 100, 0);
+        const y = clampMapNumber(shape.y, 0, 100, 0);
+        return {
+            id: String(shape.id || `shape_${index}`),
+            type,
+            x,
+            y,
+            width: clampMapNumber(
+                shape.width, 0.5, type === "line" ? 150 : 100 - x, 1
+            ),
+            height: clampMapNumber(
+                shape.height, type === "line" ? 0.2 : 0.5,
+                type === "line" ? 5 : 100 - y, type === "line" ? 0.5 : 1
+            ),
+            rotation: clampMapNumber(shape.rotation, -180, 180, 0),
+            color: /^#[0-9a-f]{6}$/i.test(shape.color || "")
+                ? shape.color
+                : "#e74c3c",
+            opacity: clampMapNumber(shape.opacity, 10, 90, 30),
+        };
+    });
+}
+
+function clampMapNumber(value, min, max, fallback) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, number));
+}
+
+function normalizeDisplayPins(pins) {
+    if (!Array.isArray(pins)) return [];
+    return pins.filter(pin => pin && typeof pin === "object").map((pin, index) => ({
+        id: String(pin.id || `pin_${index}_${Date.now()}`),
+        label: String(pin.label || `Marker ${index + 1}`),
+        x: clampMapNumber(pin.x, 0, 100, 50),
+        y: clampMapNumber(pin.y, 0, 100, 50),
+    }));
 }
 
 function selectDisplayMap(mapId) {
@@ -245,6 +309,7 @@ function selectDisplayMap(mapId) {
 async function loadDisplayMap() {
     try {
         const res = await fetch("/api/campaign/world_maps");
+        if (!res.ok) throw new Error(`Map request failed (${res.status})`);
         const data = await res.json();
         currentDisplayMaps = data.records || [];
         const mainTitleEl = document.getElementById("display-map-main-title");
@@ -253,6 +318,7 @@ async function loadDisplayMap() {
         const emptyEl = document.getElementById("display-map-empty");
         const notesEl = document.getElementById("display-map-notes");
         const pinsContainer = document.getElementById("display-map-pins");
+        const shapesContainer = document.getElementById("display-map-shapes");
 
         if (currentDisplayMaps.length === 0) {
             if (mainTitleEl) mainTitleEl.textContent = "World Map";
@@ -261,6 +327,9 @@ async function loadDisplayMap() {
             emptyEl.style.display = "block";
             notesEl.textContent = "";
             if (pinsContainer) pinsContainer.innerHTML = "";
+            if (shapesContainer) shapesContainer.innerHTML = "";
+            setDisplayMapEditing(false);
+            setDisplayMapSaveStatus("No maps available");
             return;
         }
 
@@ -280,14 +349,16 @@ async function loadDisplayMap() {
         if (switcherBar) {
             if (currentDisplayMaps.length > 1) {
                 switcherBar.style.display = "flex";
-                switcherBar.innerHTML = currentDisplayMaps.map((m, idx) => {
-                    const isCurrent = idx === currentActiveMapIndex;
-                    const mapId = m.id || m.name || idx;
-                    const btnStyle = isCurrent
-                        ? "background:#d4af37; color:#111; border:1px solid #d4af37; font-weight:bold; padding:6px 14px; border-radius:6px; cursor:pointer; font-family:'Cinzel', serif; font-size:14px; box-shadow:0 0 10px rgba(212,175,55,0.4);"
-                        : "background:#222; color:#ccc; border:1px solid #555; padding:6px 14px; border-radius:6px; cursor:pointer; font-family:'Cinzel', serif; font-size:14px;";
-                    return `<button style="${btnStyle}" onclick="selectDisplayMap('${mapId}')">${m.name || `Map ${idx + 1}`}</button>`;
-                }).join("");
+                switcherBar.replaceChildren();
+                currentDisplayMaps.forEach((map, index) => {
+                    const button = document.createElement("button");
+                    button.textContent = map.name || `Map ${index + 1}`;
+                    button.classList.toggle("active", index === currentActiveMapIndex);
+                    button.addEventListener("click", () => {
+                        selectDisplayMap(map.id || map.name || index);
+                    });
+                    switcherBar.appendChild(button);
+                });
             } else {
                 switcherBar.style.display = "none";
             }
@@ -300,16 +371,31 @@ async function loadDisplayMap() {
             notesEl.textContent = activeMap.notes || "";
 
             currentDisplayPins = parseDisplayPins(activeMap.pins || "");
+            currentDisplayShapes = parseDisplayShapes(activeMap.shapes);
+            selectedDisplayMapItem = null;
+            const mapKey = String(activeMap.id || activeMap.name || currentActiveMapIndex);
+            if (mapKey !== displayedMapKey) {
+                displayMapScale = 1;
+                displayMapOffset = {x: 0, y: 0};
+                displayedMapKey = mapKey;
+            }
+            applyDisplayMapTransform();
             renderDisplayPins();
+            renderDisplayShapes();
+            syncDisplayMapEditingUI();
+            setDisplayMapSaveStatus(displayMapEditing ? "All changes saved" : "View only");
         } else {
             imgEl.style.display = "none";
             emptyEl.style.display = "block";
             emptyEl.textContent = `Map '${activeMap.name}' has no image URL set.`;
             notesEl.textContent = activeMap.notes || "";
             if (pinsContainer) pinsContainer.innerHTML = "";
+            if (shapesContainer) shapesContainer.innerHTML = "";
+            setDisplayMapSaveStatus("This map has no image", true);
         }
     } catch (e) {
         console.error("Failed to load map:", e);
+        setDisplayMapSaveStatus(`Map load failed: ${e.message}`, true);
     }
 }
 
@@ -320,88 +406,492 @@ function renderDisplayPins() {
 
     currentDisplayPins.forEach((pin, idx) => {
         const pinEl = document.createElement("div");
+        pinEl.className = "display-map-pin";
         pinEl.dataset.pinIndex = idx;
-        pinEl.style.cssText = `
-            position: absolute;
-            left: ${pin.x}%;
-            top: ${pin.y}%;
-            transform: translate(-50%, -100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            pointer-events: auto;
-            cursor: grab;
-            user-select: none;
-            z-index: 10;
-        `;
-        pinEl.innerHTML = `
-            <span style="background:rgba(20,16,12,0.92); border:1px solid #d4af37; color:#d4af37; padding:3px 8px; border-radius:4px; font-size:12px; font-weight:bold; font-family:'Cinzel', serif; white-space:nowrap; box-shadow:0 3px 10px rgba(0,0,0,0.85);">${pin.label}</span>
-            <span style="font-size:26px; filter:drop-shadow(0 2px 5px black); line-height:1;">📍</span>
-        `;
-
-        setupDisplayPinDrag(pinEl, idx);
+        pinEl.style.left = `${pin.x}%`;
+        pinEl.style.top = `${pin.y}%`;
+        pinEl.style.setProperty("--display-map-pin-scale", String(1 / displayMapScale));
+        const label = document.createElement("span");
+        label.className = "display-map-pin-label";
+        label.textContent = pin.label || "Marker";
+        const icon = document.createElement("span");
+        icon.className = "display-map-pin-icon";
+        icon.textContent = "📍";
+        pinEl.append(label, icon);
+        pinEl.addEventListener("pointerdown", (event) => {
+            if (!displayMapEditing) return;
+            event.stopPropagation();
+            if (displayMapTool !== "select") return;
+            selectDisplayMapItem("marker", pin.id);
+            startDisplayMapItemDrag(event, "marker", pin.id);
+        });
         pinsContainer.appendChild(pinEl);
     });
 }
 
-function setupDisplayPinDrag(pinEl, pinIndex) {
-    let isDragging = false;
-    let wrapper = null;
-
-    function onPointerDown(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        isDragging = true;
-        wrapper = document.getElementById("map-img-wrapper");
-        pinEl.style.cursor = "grabbing";
-        if (pinEl.setPointerCapture) pinEl.setPointerCapture(e.pointerId);
-
-        window.addEventListener("pointermove", onPointerMove);
-        window.addEventListener("pointerup", onPointerUp);
-    }
-
-    function onPointerMove(e) {
-        if (!isDragging || !wrapper) return;
-        const rect = wrapper.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-
-        let posX = ((e.clientX - rect.left) / rect.width) * 100;
-        let posY = ((e.clientY - rect.top) / rect.height) * 100;
-
-        posX = Math.max(0, Math.min(100, posX));
-        posY = Math.max(0, Math.min(100, posY));
-
-        currentDisplayPins[pinIndex].x = Math.round(posX * 10) / 10;
-        currentDisplayPins[pinIndex].y = Math.round(posY * 10) / 10;
-
-        pinEl.style.left = `${currentDisplayPins[pinIndex].x}%`;
-        pinEl.style.top = `${currentDisplayPins[pinIndex].y}%`;
-    }
-
-    async function onPointerUp(e) {
-        if (!isDragging) return;
-        isDragging = false;
-        pinEl.style.cursor = "grab";
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-
-        // Auto-save updated pin coordinates back to database for current active map
-        if (currentDisplayMaps.length > currentActiveMapIndex) {
-            currentDisplayMaps[currentActiveMapIndex].pins = serializeDisplayPins(currentDisplayPins);
-            try {
-                await fetch("/api/campaign/world_maps", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({records: currentDisplayMaps})
-                });
-            } catch (saveErr) {
-                console.warn("Failed to save dragged pin position:", saveErr);
-            }
+function renderDisplayShapes() {
+    const layer = document.getElementById("display-map-shapes");
+    if (!layer) return;
+    layer.innerHTML = "";
+    currentDisplayShapes.forEach((shape) => {
+        const shapeEl = document.createElement("div");
+        const selected = selectedDisplayMapItem?.type === "shape"
+            && selectedDisplayMapItem.id === shape.id;
+        shapeEl.className = `display-map-shape display-map-${shape.type}${selected ? " selected" : ""}`;
+        shapeEl.style.left = `${shape.x}%`;
+        shapeEl.style.top = `${shape.y}%`;
+        shapeEl.style.width = `${shape.width}%`;
+        shapeEl.style.height = shape.type === "line" ? "0" : `${shape.height}%`;
+        shapeEl.style.transform = `rotate(${shape.rotation || 0}deg)`;
+        const color = shape.color || "#e74c3c";
+        if (shape.type === "line") {
+            shapeEl.style.borderTopColor = colorWithOpacity(color, shape.opacity ?? 30);
+        } else {
+            shapeEl.style.borderColor = color;
+            shapeEl.style.backgroundColor = colorWithOpacity(color, shape.opacity ?? 30);
         }
+        if (displayMapEditing) {
+            shapeEl.style.pointerEvents = "auto";
+            shapeEl.addEventListener("pointerdown", (event) => {
+                event.stopPropagation();
+                if (displayMapTool !== "select") return;
+                selectDisplayMapItem("shape", shape.id);
+                startDisplayMapItemDrag(
+                    event, "shape", shape.id,
+                    event.target.classList.contains("display-map-resize-handle")
+                );
+            });
+        }
+        if (selected && displayMapEditing) {
+            const handle = document.createElement("span");
+            handle.className = "display-map-resize-handle";
+            shapeEl.appendChild(handle);
+        }
+        layer.appendChild(shapeEl);
+    });
+}
+
+function colorWithOpacity(color, opacity) {
+    const match = /^#?([0-9a-f]{6})$/i.exec(color);
+    if (!match) return `rgba(231, 76, 60, ${Number(opacity) / 100})`;
+    const value = Number.parseInt(match[1], 16);
+    return `rgba(${value >> 16}, ${(value >> 8) & 255}, ${value & 255}, ${Number(opacity) / 100})`;
+}
+
+function getDisplayMapCoordinates(event) {
+    const imageRect = document.getElementById("display-map-img")?.getBoundingClientRect();
+    if (!imageRect || !imageRect.width || !imageRect.height) return null;
+    return {
+        x: Math.max(0, Math.min(100, ((event.clientX - imageRect.left) / imageRect.width) * 100)),
+        y: Math.max(0, Math.min(100, ((event.clientY - imageRect.top) / imageRect.height) * 100)),
+    };
+}
+
+function toggleDisplayMapEditing() {
+    setDisplayMapEditing(!displayMapEditing);
+}
+
+function setDisplayMapEditing(enabled) {
+    displayMapEditing = enabled;
+    displayMapTool = "select";
+    selectedDisplayMapItem = null;
+    syncDisplayMapEditingUI();
+    renderDisplayPins();
+    renderDisplayShapes();
+    setDisplayMapSaveStatus(enabled ? "All changes saved" : "View only");
+}
+
+function syncDisplayMapEditingUI() {
+    const editButton = document.getElementById("display-map-edit-toggle");
+    const editTools = document.getElementById("display-map-edit-tools");
+    const viewport = document.getElementById("display-map-viewport");
+    if (viewport) viewport.dataset.mapTool = displayMapTool;
+    if (editButton) {
+        editButton.textContent = displayMapEditing ? "Done Editing" : "Edit Map";
+        editButton.classList.toggle("active", displayMapEditing);
+    }
+    if (editTools) editTools.style.display = displayMapEditing ? "flex" : "none";
+    if (viewport) viewport.classList.toggle("display-map-editing", displayMapEditing);
+    document.querySelectorAll("[data-map-tool]").forEach((button) => {
+        button.classList.toggle(
+            "active", displayMapEditing && button.dataset.mapTool === displayMapTool
+        );
+    });
+
+    const marker = selectedDisplayMapItem?.type === "marker"
+        ? currentDisplayPins.find(pin => pin.id === selectedDisplayMapItem.id)
+        : null;
+    const shape = selectedDisplayMapItem?.type === "shape"
+        ? currentDisplayShapes.find(item => item.id === selectedDisplayMapItem.id)
+        : null;
+    const markerProperty = document.getElementById("display-map-marker-property");
+    const shapeProperty = document.getElementById("display-map-shape-property");
+    const deleteButton = document.getElementById("display-map-delete-selected");
+    const markerInput = document.getElementById("display-map-marker-label");
+    const colorInput = document.getElementById("display-map-shape-color");
+    const opacityInput = document.getElementById("display-map-shape-opacity");
+    const rotationInput = document.getElementById("display-map-shape-rotation");
+    const rotationValue = document.getElementById("display-map-shape-rotation-value");
+    if (markerProperty) markerProperty.style.display = marker ? "flex" : "none";
+    if (shapeProperty) shapeProperty.style.display = shape ? "flex" : "none";
+    if (deleteButton) deleteButton.style.display = selectedDisplayMapItem ? "inline-block" : "none";
+    if (marker && markerInput && document.activeElement !== markerInput) {
+        markerInput.value = marker.label || "";
+    }
+    if (shape && colorInput) colorInput.value = shape.color || "#e74c3c";
+    if (shape && opacityInput) opacityInput.value = shape.opacity ?? 30;
+    if (shape && rotationInput) rotationInput.value = shape.rotation || 0;
+    if (shape && rotationValue) rotationValue.textContent = `${shape.rotation || 0}°`;
+}
+
+function setDisplayMapTool(tool) {
+    if (!displayMapEditing) return;
+    displayMapTool = tool;
+    selectedDisplayMapItem = null;
+    syncDisplayMapEditingUI();
+    renderDisplayPins();
+    renderDisplayShapes();
+}
+
+function selectDisplayMapItem(type, id) {
+    selectedDisplayMapItem = {type, id};
+    syncDisplayMapEditingUI();
+    renderDisplayPins();
+    renderDisplayShapes();
+}
+
+function deleteSelectedDisplayMapItem() {
+    if (!selectedDisplayMapItem) return;
+    if (selectedDisplayMapItem.type === "marker") {
+        currentDisplayPins = currentDisplayPins.filter(
+            pin => pin.id !== selectedDisplayMapItem.id
+        );
+    } else {
+        currentDisplayShapes = currentDisplayShapes.filter(
+            shape => shape.id !== selectedDisplayMapItem.id
+        );
+    }
+    selectedDisplayMapItem = null;
+    renderDisplayPins();
+    renderDisplayShapes();
+    syncDisplayMapEditingUI();
+    markDisplayMapChanged();
+}
+
+function startDisplayMapItemDrag(event, type, id, resizing = false) {
+    event.preventDefault();
+    const startPoint = getDisplayMapCoordinates(event);
+    const item = type === "marker"
+        ? currentDisplayPins.find(pin => pin.id === id)
+        : currentDisplayShapes.find(shape => shape.id === id);
+    if (!startPoint || !item) return;
+    const start = {...item};
+    let changed = false;
+
+    function move(moveEvent) {
+        const point = getDisplayMapCoordinates(moveEvent);
+        if (!point) return;
+        const dx = point.x - startPoint.x;
+        const dy = point.y - startPoint.y;
+        if (dx !== 0 || dy !== 0) changed = true;
+        if (type === "marker") {
+            item.x = Math.max(0, Math.min(100, start.x + dx));
+            item.y = Math.max(0, Math.min(100, start.y + dy));
+        } else if (resizing && item.type === "line") {
+            const imageRect = document.getElementById("display-map-img").getBoundingClientRect();
+            const pixelX = (point.x - start.x) * imageRect.width / 100;
+            const pixelY = (point.y - start.y) * imageRect.height / 100;
+            item.width = Math.max(0.5, Math.hypot(pixelX, pixelY) * 100 / imageRect.width);
+            item.rotation = Math.atan2(pixelY, pixelX) * 180 / Math.PI;
+        } else if (resizing) {
+            const imageRect = document.getElementById("display-map-img").getBoundingClientRect();
+            const angle = (start.rotation || 0) * Math.PI / 180;
+            const pixelX = dx * imageRect.width / 100;
+            const pixelY = dy * imageRect.height / 100;
+            const localX = (Math.cos(angle) * pixelX + Math.sin(angle) * pixelY)
+                * 100 / imageRect.width;
+            const localY = (-Math.sin(angle) * pixelX + Math.cos(angle) * pixelY)
+                * 100 / imageRect.height;
+            item.width = Math.max(0.5, Math.min(100 - start.x, start.width + localX));
+            item.height = Math.max(0.5, Math.min(100 - start.y, start.height + localY));
+        } else {
+            item.x = Math.max(0, Math.min(100 - start.width, start.x + dx));
+            item.y = Math.max(0, Math.min(100 - start.height, start.y + dy));
+        }
+        renderDisplayPins();
+        renderDisplayShapes();
     }
 
-    pinEl.addEventListener("pointerdown", onPointerDown);
+    function finish() {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
+        if (changed) markDisplayMapChanged();
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish, {once: true});
+    window.addEventListener("pointercancel", finish, {once: true});
 }
+
+function startDisplayMapShape(event, startPoint, type) {
+    event.preventDefault();
+    const imageRect = document.getElementById("display-map-img").getBoundingClientRect();
+    const shape = {
+        id: `shape_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        type,
+        x: startPoint.x,
+        y: startPoint.y,
+        width: 0.5,
+        height: 0.5,
+        rotation: 0,
+        color: document.getElementById("display-map-shape-color")?.value || "#e74c3c",
+        opacity: Number(document.getElementById("display-map-shape-opacity")?.value || 30),
+    };
+    currentDisplayShapes.push(shape);
+    selectDisplayMapItem("shape", shape.id);
+
+    function move(moveEvent) {
+        const point = getDisplayMapCoordinates(moveEvent);
+        if (!point) return;
+        if (type === "line") {
+            const pixelX = (point.x - startPoint.x) * imageRect.width / 100;
+            const pixelY = (point.y - startPoint.y) * imageRect.height / 100;
+            shape.width = Math.max(0.5, Math.hypot(pixelX, pixelY) * 100 / imageRect.width);
+            shape.rotation = Math.atan2(pixelY, pixelX) * 180 / Math.PI;
+        } else {
+            shape.x = Math.min(startPoint.x, point.x);
+            shape.y = Math.min(startPoint.y, point.y);
+            shape.width = Math.max(0.5, Math.abs(point.x - startPoint.x));
+            shape.height = Math.max(0.5, Math.abs(point.y - startPoint.y));
+        }
+        renderDisplayShapes();
+    }
+
+    function finish() {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
+        const tooSmall = type === "line"
+            ? shape.width < 1
+            : shape.width < 1 || shape.height < 1;
+        if (tooSmall) {
+            currentDisplayShapes = currentDisplayShapes.filter(item => item.id !== shape.id);
+            selectedDisplayMapItem = null;
+        }
+        renderDisplayShapes();
+        syncDisplayMapEditingUI();
+        if (currentDisplayShapes.some(item => item.id === shape.id)) markDisplayMapChanged();
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish, {once: true});
+    window.addEventListener("pointercancel", finish, {once: true});
+}
+
+function startDisplayMapPan(event) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originalOffset = {...displayMapOffset};
+    const viewport = document.getElementById("display-map-viewport");
+    if (viewport) viewport.style.cursor = "grabbing";
+
+    function move(moveEvent) {
+        displayMapOffset = {
+            x: originalOffset.x + moveEvent.clientX - startX,
+            y: originalOffset.y + moveEvent.clientY - startY,
+        };
+        applyDisplayMapTransform();
+    }
+
+    function finish() {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
+        if (viewport) viewport.style.cursor = "";
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish, {once: true});
+    window.addEventListener("pointercancel", finish, {once: true});
+}
+
+function handleDisplayMapPointerDown(event) {
+    const point = getDisplayMapCoordinates(event);
+    if (!point) return;
+    if (displayMapEditing && displayMapTool === "marker") {
+        const marker = {
+            id: `pin_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            label: `Marker ${currentDisplayPins.length + 1}`,
+            x: Math.round(point.x * 10) / 10,
+            y: Math.round(point.y * 10) / 10,
+        };
+        currentDisplayPins.push(marker);
+        selectDisplayMapItem("marker", marker.id);
+        renderDisplayPins();
+        markDisplayMapChanged();
+    } else if (displayMapEditing && ["rectangle", "ellipse", "line"].includes(displayMapTool)) {
+        startDisplayMapShape(event, point, displayMapTool);
+    } else if (!displayMapEditing || displayMapTool === "pan") {
+        startDisplayMapPan(event);
+    } else if (displayMapTool === "select") {
+        selectedDisplayMapItem = null;
+        syncDisplayMapEditingUI();
+        renderDisplayPins();
+        renderDisplayShapes();
+    }
+}
+
+function applyDisplayMapTransform() {
+    const wrapper = document.getElementById("map-img-wrapper");
+    const zoomLabel = document.getElementById("display-map-zoom-level");
+    if (wrapper) {
+        wrapper.style.transform = `translate(${displayMapOffset.x}px, ${displayMapOffset.y}px) scale(${displayMapScale})`;
+    }
+    document.querySelectorAll(".display-map-pin").forEach((pin) => {
+        pin.style.setProperty("--display-map-pin-scale", String(1 / displayMapScale));
+    });
+    if (zoomLabel) zoomLabel.textContent = `${Math.round(displayMapScale * 100)}%`;
+}
+
+function zoomDisplayMap(factor) {
+    displayMapScale = Math.max(0.5, Math.min(4, displayMapScale * factor));
+    applyDisplayMapTransform();
+}
+
+function resetDisplayMapView() {
+    displayMapScale = 1;
+    displayMapOffset = {x: 0, y: 0};
+    applyDisplayMapTransform();
+}
+
+function setDisplayMapSaveStatus(message, isError = false) {
+    const status = document.getElementById("display-map-save-status");
+    if (status) {
+        status.textContent = message;
+        status.style.color = isError ? "#ff7777" : "#aaa";
+    }
+    const retry = document.getElementById("display-map-save-retry");
+    if (retry) retry.style.display = isError && displayMapEditing ? "inline-block" : "none";
+}
+
+function markDisplayMapChanged() {
+    const activeMap = currentDisplayMaps[currentActiveMapIndex];
+    if (!activeMap) return;
+    const mapKey = String(activeMap.id || activeMap.name || currentActiveMapIndex);
+    pendingDisplayMapEdits.set(mapKey, {
+        pins: serializeDisplayPins(currentDisplayPins),
+        shapes: JSON.stringify(currentDisplayShapes),
+    });
+    setDisplayMapSaveStatus("Unsaved changes");
+    if (displayMapSaveTimer) clearTimeout(displayMapSaveTimer);
+    displayMapSaveTimer = setTimeout(saveDisplayMapEdits, 500);
+}
+
+async function retrySaveDisplayMap() {
+    if (displayMapSaveTimer) clearTimeout(displayMapSaveTimer);
+    await saveDisplayMapEdits();
+}
+
+async function saveDisplayMapEdits() {
+    if (displayMapSaving) return;
+    displayMapSaving = true;
+    try {
+        while (pendingDisplayMapEdits.size) {
+            const [mapKey, annotations] = pendingDisplayMapEdits.entries().next().value;
+            const latestResponse = await fetch("/api/campaign/world_maps");
+            const latestData = await latestResponse.json();
+            if (!latestResponse.ok) {
+                throw new Error(latestData.message || latestData.error || "Could not reload maps before saving");
+            }
+            const latestMaps = latestData.records || [];
+            const targetIndex = latestMaps.findIndex((map, index) =>
+                String(map.id || map.name || index) === mapKey
+            );
+            const target = latestMaps[targetIndex];
+            if (!target) throw new Error("This map was removed before its annotations could be saved");
+            target.pins = annotations.pins;
+            target.shapes = annotations.shapes;
+
+            const response = await fetch("/api/campaign/world_maps", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({records: latestMaps}),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.message || result.error || `Save failed (${response.status})`);
+            }
+            if (pendingDisplayMapEdits.get(mapKey) === annotations) {
+                pendingDisplayMapEdits.delete(mapKey);
+            }
+            currentDisplayMaps = result.records || latestMaps;
+            const currentMapIndex = currentDisplayMaps.findIndex(map =>
+                String(map.id || map.name) === String(activeMapId)
+            );
+            if (currentMapIndex !== -1) currentActiveMapIndex = currentMapIndex;
+            setDisplayMapSaveStatus(
+                pendingDisplayMapEdits.size ? "Saving changes…" : "All changes saved"
+            );
+        }
+    } catch (error) {
+        console.error("Failed to save map changes:", error);
+        setDisplayMapSaveStatus(`Save failed: ${error.message}`, true);
+    } finally {
+        displayMapSaving = false;
+    }
+}
+
+document.getElementById("display-map-viewport")?.addEventListener(
+    "pointerdown", handleDisplayMapPointerDown
+);
+document.getElementById("display-map-viewport")?.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    zoomDisplayMap(event.deltaY < 0 ? 1.1 : 0.9);
+}, {passive: false});
+document.getElementById("display-map-marker-label")?.addEventListener("input", (event) => {
+    const marker = currentDisplayPins.find(
+        pin => pin.id === selectedDisplayMapItem?.id
+    );
+    if (!marker) return;
+    marker.label = event.target.value;
+    const label = document.querySelector(
+        `.display-map-pin[data-pin-index="${currentDisplayPins.indexOf(marker)}"] .display-map-pin-label`
+    );
+    if (label) label.textContent = marker.label || "Marker";
+    markDisplayMapChanged();
+});
+document.getElementById("display-map-shape-color")?.addEventListener("input", (event) => {
+    const shape = currentDisplayShapes.find(
+        item => item.id === selectedDisplayMapItem?.id
+    );
+    if (!shape) return;
+    shape.color = event.target.value;
+    renderDisplayShapes();
+    markDisplayMapChanged();
+});
+document.getElementById("display-map-shape-opacity")?.addEventListener("input", (event) => {
+    const shape = currentDisplayShapes.find(
+        item => item.id === selectedDisplayMapItem?.id
+    );
+    if (!shape) return;
+    shape.opacity = Number(event.target.value);
+    renderDisplayShapes();
+    markDisplayMapChanged();
+});
+document.getElementById("display-map-shape-rotation")?.addEventListener("input", (event) => {
+    const shape = currentDisplayShapes.find(
+        item => item.id === selectedDisplayMapItem?.id
+    );
+    if (!shape) return;
+    shape.rotation = Number(event.target.value);
+    const value = document.getElementById("display-map-shape-rotation-value");
+    if (value) value.textContent = `${shape.rotation}°`;
+    renderDisplayShapes();
+    markDisplayMapChanged();
+});
 
 async function loadDisplayObjectives() {
     try {

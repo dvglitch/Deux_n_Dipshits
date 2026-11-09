@@ -145,6 +145,7 @@ class CampaignApiTests(unittest.TestCase):
                     "name": "Sword Coast",
                     "image_url": "https://example.com/map.jpg",
                     "pins": "Party: 45%, 60% | Dungeon: 70%, 30%",
+                    "shapes": '[{"id":"shape-1","type":"rectangle","x":10,"y":20,"width":30,"height":40,"color":"#e74c3c","opacity":30,"rotation":45},{"id":"shape-2","type":"ellipse","x":15,"y":25,"width":20,"height":10,"rotation":-30},{"id":"shape-3","type":"line","x":30,"y":40,"width":25,"height":0.5,"rotation":90}]',
                     "notes": "Main region map"
                 }
             ]
@@ -157,6 +158,10 @@ class CampaignApiTests(unittest.TestCase):
         records = get_res.get_json()["records"]
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["pins"], "Party: 45%, 60% | Dungeon: 70%, 30%")
+        self.assertIn('"type":"rectangle"', records[0]["shapes"])
+        self.assertIn('"type":"ellipse"', records[0]["shapes"])
+        self.assertIn('"type":"line"', records[0]["shapes"])
+        self.assertIn('"rotation":45', records[0]["shapes"])
 
     def test_recaps_and_objectives_persistence(self):
         # Objectives

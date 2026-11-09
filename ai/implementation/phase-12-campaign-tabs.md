@@ -1,6 +1,6 @@
 # Phase 12 - Campaign Tabs
 
-Status: Complete. TV Display tabs (Timers, World Map with pins, Quest Objectives, Session Recaps) wired with realtime DM switching.
+Status: Complete, with map editing expanded in 2026-11.
 
 ## Objective
 Add low-frequency campaign context to the TV without competing with combat.
@@ -8,6 +8,10 @@ Add low-frequency campaign context to the TV without competing with combat.
 ## Scope
 - Timers, World Map, Objectives, and Recaps tabs.
 - Static map with movable party/objective markers.
+- Display-page zoom/pan and explicit map-editing mode.
+- Add, rename, move, and remove map markers from the display; marker icons and labels stay a fixed screen size while map zoom changes.
+- Draw, move, resize, recolor, rotate, and remove translucent rectangle and ellipse annotations from the display; draw, move, rotate, and remove lines.
+- Autosave map annotations to the existing campaign map records, preserving them when Campaign Maintenance saves other map fields.
 - Objective status/priority/next-step information.
 - Durable recap history and maintenance editing.
 - DM-phone tab switching.
@@ -15,7 +19,7 @@ Add low-frequency campaign context to the TV without competing with combat.
 ## Deliverables
 - TV Display tab views in [display.html](src/dnd_clock/templates/display.html) and [display.js](src/dnd_clock/static/js/display.js):
   1. **Timers (Combat View)**: Active player cards, cooldown progress bars, HP indicators, condition badges, and bottom enemy status ribbon.
-  2. **World Map**: Image presentation with labeled coordinate pin overlays (e.g. `Party: 45%, 60% | Dungeon: 70%, 30%`) and location notes.
+  2. **World Map**: Image presentation with labeled coordinate pin overlays (e.g. `Party: 45%, 60% | Dungeon: 70%, 30%`), location notes, zoom/pan, and explicit Edit Map tools. Rectangle, ellipse, and line annotations use normalized positions and are saved with the map record. The map switcher remains available in edit mode.
   3. **Objectives**: Filtered active quest cards showing title, priority badges (High/Medium/Low), and detailed objective descriptions.
   4. **Recaps**: Chronological session recap cards showing Session #, Date, Title, and key story summary.
 - Realtime DM switcher on [dm.html](src/dnd_clock/templates/dm.html) (`dmDisplayTabSelect`) syncing display tab updates instantly via `set_display_tab`.
@@ -26,7 +30,7 @@ Add low-frequency campaign context to the TV without competing with combat.
 - Verified database persistence for world map pins, quest objectives, and recaps.
 
 ## Success criteria
-DM can change the TV tab from the phone; Timers remains the combat default; map/objective/recap data persists; players need no campaign controls on phones.
+DM can change the TV tab from the phone; Timers remains the combat default; map/objective/recap data persists; display map interactions are view-only unless Edit Map is enabled; players need no campaign controls on phones.
 
 ## Handoff
-Phase 12 is complete. All non-combat campaign display tabs are integrated and tested. Phase 13 can proceed with Final Usability Rehearsal and Polish.
+Phase 12 remains complete. The display map editor was exercised in a local browser preview: marker creation, rectangle/ellipse/line creation, shape rotation, autosave/reload, map switching while editing, and preserving shape data when Campaign Maintenance saves the map collection were verified. Phase 13 can proceed with Final Usability Rehearsal and Polish.

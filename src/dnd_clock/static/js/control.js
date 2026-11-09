@@ -1133,6 +1133,9 @@ function addMapRow(data = {}) {
     const pinsList = parsePins(data.pins || '');
     const pinCount = pinsList.length;
     const imgUrl = data.image_url || '';
+    const shapesValue = typeof data.shapes === 'string'
+        ? data.shapes
+        : JSON.stringify(data.shapes || []);
 
     tr.innerHTML = `
         <td><input type="text" class="m-title" value="${escapeHtml(data.name || '')}" placeholder="e.g. Sword Coast" style="width:100%;"></td>
@@ -1152,6 +1155,7 @@ function addMapRow(data = {}) {
         </td>
         <td>
             <input type="hidden" class="m-pins" value="${escapeHtml(typeof data.pins === 'string' ? data.pins : serializePins(data.pins))}">
+            <input type="hidden" class="m-shapes" value="${escapeHtml(shapesValue)}">
             <div style="display:flex; align-items:center; gap:8px;">
                 <button type="button" class="maint-btn-primary" style="background:#4a3b2c; border:1px solid #d4af37; font-size:12px; padding:5px 10px; font-weight:bold;" onclick="openMapMarkerModal('${rowId}')">
                     📍 Edit Markers (<span class="m-pin-count">${pinCount}</span>)
@@ -1436,6 +1440,7 @@ async function saveMapsCollection() {
         name: r.querySelector('.m-title')?.value || '',
         image_url: r.querySelector('.m-url')?.value || '',
         pins: r.querySelector('.m-pins')?.value || '',
+        shapes: r.querySelector('.m-shapes')?.value || '[]',
         notes: r.querySelector('.m-notes')?.value || ''
     })).filter(r => r.name || r.image_url);
 

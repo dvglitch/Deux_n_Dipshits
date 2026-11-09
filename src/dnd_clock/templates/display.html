@@ -40,12 +40,47 @@
             <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:15px; flex-wrap:wrap; gap:12px;">
                 <h1 id="display-map-main-title" style="font-family:'Cinzel', serif; font-size:40px; margin:0; color:#d4af37;">World Map</h1>
                 <!-- Multi-map switcher buttons -->
-                <div id="display-map-switcher-bar" style="display:none; flex-wrap:wrap; gap:8px; align-items:center;"></div>
+                <div id="display-map-switcher-bar" class="display-map-switcher" style="display:none; flex-wrap:wrap; gap:8px; align-items:center;"></div>
+            </div>
+            <div id="display-map-toolbar" class="display-map-toolbar">
+                <button id="display-map-edit-toggle" type="button" onclick="toggleDisplayMapEditing()">Edit Map</button>
+                <span class="display-map-tool-divider"></span>
+                <button type="button" onclick="zoomDisplayMap(0.8)" aria-label="Zoom out">−</button>
+                <span id="display-map-zoom-level">100%</span>
+                <button type="button" onclick="zoomDisplayMap(1.25)" aria-label="Zoom in">+</button>
+                <button type="button" onclick="resetDisplayMapView()">Fit / Reset</button>
+                <div id="display-map-edit-tools" class="display-map-edit-tools" style="display:none;">
+                    <span class="display-map-tool-divider"></span>
+                    <button type="button" data-map-tool="select" onclick="setDisplayMapTool('select')">Select</button>
+                    <button type="button" data-map-tool="marker" onclick="setDisplayMapTool('marker')">Add Marker</button>
+                    <button type="button" data-map-tool="rectangle" onclick="setDisplayMapTool('rectangle')">Rectangle</button>
+                    <button type="button" data-map-tool="ellipse" onclick="setDisplayMapTool('ellipse')">Ellipse</button>
+                    <button type="button" data-map-tool="line" onclick="setDisplayMapTool('line')">Line</button>
+                    <button type="button" data-map-tool="pan" onclick="setDisplayMapTool('pan')">Pan</button>
+                    <label class="display-map-property" id="display-map-marker-property" style="display:none;">
+                        Marker
+                        <input id="display-map-marker-label" type="text" maxlength="60" aria-label="Selected marker label">
+                    </label>
+                    <label class="display-map-property" id="display-map-shape-property" style="display:none;">
+                        Color
+                        <input id="display-map-shape-color" type="color" value="#e74c3c" aria-label="Shape color">
+                        <input id="display-map-shape-opacity" type="range" min="10" max="90" value="30" aria-label="Shape opacity">
+                        <span>Rotate</span>
+                        <input id="display-map-shape-rotation" type="range" min="-180" max="180" value="0" aria-label="Selected shape rotation">
+                        <output id="display-map-shape-rotation-value" for="display-map-shape-rotation">0°</output>
+                    </label>
+                    <button id="display-map-delete-selected" type="button" class="display-map-danger" style="display:none;" onclick="deleteSelectedDisplayMapItem()">Delete Selected</button>
+                    <button id="display-map-save-retry" type="button" class="display-map-danger" style="display:none;" onclick="retrySaveDisplayMap()">Retry Save</button>
+                </div>
+                <span id="display-map-save-status" role="status" aria-live="polite">View only</span>
             </div>
             <div id="display-map-container" style="background:#111; border:2px solid #d4af37; border-radius:12px; padding:15px; min-height:500px; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative;">
-                <div id="map-img-wrapper" style="position:relative; display:inline-block; max-width:100%;">
-                    <img id="display-map-img" src="" alt="World Map" style="max-width:100%; max-height:75vh; border-radius:8px; display:none;">
-                    <div id="display-map-pins" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+                <div id="display-map-viewport">
+                    <div id="map-img-wrapper">
+                        <img id="display-map-img" src="" alt="World Map">
+                        <div id="display-map-shapes"></div>
+                        <div id="display-map-pins"></div>
+                    </div>
                 </div>
                 <div id="display-map-empty" style="color:#888; font-size:18px;">No map image loaded yet. Add maps in Campaign Maintenance.</div>
                 <div id="display-map-notes" style="margin-top:15px; font-size:16px; color:#c0b8a8; text-align:left; width:100%;"></div>
