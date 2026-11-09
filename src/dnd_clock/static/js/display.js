@@ -757,7 +757,7 @@ function applyDisplayMapTransform() {
 }
 
 function zoomDisplayMap(factor) {
-    displayMapScale = Math.max(0.5, Math.min(4, displayMapScale * factor));
+    displayMapScale = Math.max(0.5, Math.min(6, displayMapScale * factor));
     applyDisplayMapTransform();
 }
 
